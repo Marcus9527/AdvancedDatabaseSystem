@@ -15,7 +15,8 @@ class TransactionManager:
             self.lock_table.append(lock.Lock())
 
         # transaction_index(a) : [transaction_index(b)] a wait bi
-        self.wait_table = {}
+        self.transaction_wait_table = {}
+        self.data_wait_table = {}
 
         # transaction_index(b) : [transaction_index(ai)] (sequential list) b block ai
         self.block_table = {}
@@ -136,16 +137,25 @@ class TransactionManager:
         print(msg)
         _ro = self.transaction_list[transaction_id].ro
         read_result = self.DM.read(transaction_id, variable_id, _ro)
+        # lock successful
         if read_result[0]:
             sites_touched = read_result[1]
             self.transaction_list[transaction_id].touch_set.add(sites_touched)
+            # variable is already locked by transaction
+            if variable_id not in self.transaction_list[transaction_id].lock_list:
+                self.transaction_list[transaction_id].lock_list[variable_id] = 'r'
+        # blocked
         else:
             blockers = read_result[1]
+            if variable_id in self.data_wait_table:
+                self.data_wait_table[variable_id].append(transaction_id)
+            else:
+                self.data_wait_table[variable_id] = transaction_id
             for blocker in blockers:
-                if transaction_id in self.wait_table:
-                    self.wait_table[transaction_id].append(blocker)
+                if transaction_id in self.transaction_wait_table:
+                    self.transaction_wait_table[transaction_id].append(blocker)
                 else:
-                    self.wait_table[transaction_id] = [blocker]
+                    self.transaction_wait_table[transaction_id] = [blocker]
                 if blocker in self.block_table:
                     self.block_table[blocker].append(transaction_id)
                 else:
@@ -161,13 +171,19 @@ class TransactionManager:
             sites_touched = write_result[1]
             self.transaction_list[transaction_id].touch_set.add(sites_touched)
             self.transaction_list[transaction_id].commit_list[transaction_id] = value
+            # update lock info in transaction
+            self.transaction_list[transaction_id].lock_list[variable_id] = 'w'
         else:
+            if variable_id in self.data_wait_table:
+                self.data_wait_table[variable_id].append(transaction_id)
+            else:
+                self.data_wait_table[variable_id] = transaction_id
             blockers = write_result[1]
             for blocker in blockers:
-                if transaction_id in self.wait_table:
-                    self.wait_table[transaction_id].append(blocker)
+                if transaction_id in self.transaction_wait_table:
+                    self.transaction_wait_table[transaction_id].append(blocker)
                 else:
-                    self.wait_table[transaction_id] = [blocker]
+                    self.transaction_wait_table[transaction_id] = [blocker]
                 if blocker in self.block_table:
                     self.block_table[blocker].append(transaction_id)
                 else:
@@ -196,7 +212,7 @@ class TransactionManager:
         start_time = trans.start_time
         end_time = sys_time
         if self.DM.validation(sites_touched, start_time, end_time):
-            self.DM.commit(trans.commit_list)
+            self.commit(transaction_id)
         else:
             self.abort(transaction_id)
 
@@ -209,10 +225,30 @@ class TransactionManager:
         msg = "recover site " + str(site_id)
         print(msg)
         self.DM.recover(site_id)
+    #     check if some blocked transaction can be moving forward
+
+    def commit(self, transaction_id):
+        msg = "commit transaction "+str(transaction_id)
+        print(msg)
+        trans = self.transaction_list[transaction_id]
+        self.DM.commit(trans.commit_list)
+        self.release_locks(transaction_id)
+        del self.transaction_list[transaction_id]
+        if transaction_id in self.transaction_wait_table:
+            del self.transaction_wait_table[transaction_id]
+        if transaction_id in self.block_table:
+            del self.block_table[transaction_id]
 
     def abort(self, transaction_id):
         msg = "abort transaction "+str(transaction_id)
         print(msg)
+        trans = self.transaction_list[transaction_id]
+        self.release_locks(transaction_id)
+        del self.transaction_list[transaction_id]
+        if transaction_id in self.transaction_wait_table:
+            del self.transaction_wait_table[transaction_id]
+        if transaction_id in self.block_table:
+            del self.block_table[transaction_id]
 
     def deadlock_detection(self):
         msg = "detecting deadlock"
@@ -227,9 +263,9 @@ class TransactionManager:
                 # visited[t] = 1
                 while len(stack) != 0:
                     f = stack[-1]
-                    if visited[f] == 0 and f in self.wait_table:
+                    if visited[f] == 0 and f in self.transaction_wait_table:
                         visited[f] = 1
-                        for c in self.wait_table[f]:
+                        for c in self.transaction_wait_table[f]:
                             if c not in self.transaction_list:
                                 continue
                         # c = self.wait_table[f][0]
@@ -240,7 +276,7 @@ class TransactionManager:
                                 while cur != f:
                                     if self.transaction_list[cur].time > self.transaction_list[youngest_transaction].time:
                                         youngest_transaction = cur
-                                    for next_trans in self.wait_table[cur]:
+                                    for next_trans in self.transaction_wait_table[cur]:
                                         if visited[next_trans] == 1:
                                             cur = next_trans
                                 print("Prey located, let's sacrifice transaction "+str(youngest_transaction))
@@ -250,6 +286,27 @@ class TransactionManager:
                     else:
                         visited[f] = 2
                         stack.pop()
+
+    def release_locks(self, transaction_id):
+        locks = self.transaction_list[transaction_id].lock_list
+        free_datas = self.DM.release_locks(transaction_id, locks)
+        for free_data in free_datas:
+            if free_data in self.data_wait_table:
+                # some transaction(s) is/are waiting for this data to be freed
+                next_transaction = self.data_wait_table[free_data][0]
+                if self.transaction_list[next_transaction].status == 'write':
+                    value = self.transaction_list[next_transaction].query_buffer[1]
+                    self.write(next_transaction, free_data, value)
+                    self.transaction_list[next_transaction].status = 'normal'
+                    del self.data_wait_table[free_data][0]
+                elif self.transaction_list[next_transaction].status == 'read':
+                    while self.data_wait_table[free_data] and self.transaction_list[next_transaction].status == 'read':
+                        self.read(next_transaction, free_data)
+                        self.transaction_list[next_transaction].status = 'normal'
+                        del self.data_wait_table[free_data][0]
+                # if there's no anyone else waiting for this free data
+                if not self.data_wait_table[free_data]:
+                    del self.data_wait_table[free_data]
 
 
 if __name__ == "__main__":
@@ -262,4 +319,4 @@ if __name__ == "__main__":
     # TM.wait_table[3] = [4]
     TM.deadlock_detection()
     print(TM.block_table)
-    print(TM.wait_table)
+    print(TM.transaction_wait_table)

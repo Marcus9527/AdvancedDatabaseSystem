@@ -52,3 +52,9 @@ class DataManager:
     def commit(self, new_data):
         pass
 
+    # locks is a dict
+    # eg:   transaction_id = 2  locks = {3:'w', 5,'r'}
+    # mean release T2's write lock on x3 and read lock on x5
+    def release_locks(self, transaction_id, locks):
+        return [3, 5]
+

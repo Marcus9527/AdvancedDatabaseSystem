@@ -36,3 +36,7 @@ lock table
 wait table
 
 variable distribution
+
+lock can be promoted, eg:
+    R(T1,x1) read lock
+    W(T1,x1) promote to write lock
