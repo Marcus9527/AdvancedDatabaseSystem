@@ -21,9 +21,28 @@ class DataManager:
         pass
 
     # return either (success, read_from_site) or (fail, blocked_by)
-    def read(self, variable_id):
+    def read(self, transaction_id, variable_id, ro):
         success = False
         if success:
-            return True, 10
+            return True, [10]
         else:
-            return False, 5
+            return False, [5]
+
+    def write(self, transaction_id, variable_id, value):
+        success = False
+        if success:
+            return True, [7]
+        else:
+            return False, [5]
+
+    # return True if no site in sites have failed during [start_time, end_time]
+    def validation(self, sites, start_time, end_time):
+        success = True
+        if success:
+            return True
+        else:
+            return False
+
+    def commit(self, new_data):
+        pass
+

@@ -33,7 +33,7 @@ class TransactionManager:
             self.deadlock_detection()
             try:
                 line = line.strip('\n')
-                operation = re.split('\(|\)', line)
+                operation = re.split('[()]', line)
                 operation_name = operation[0]
 
                 if len(operation) < 2:
@@ -96,7 +96,7 @@ class TransactionManager:
                         errmsg += " provided in line " + str(line_num)
                         raise ValueError(errmsg)
                     transaction_id = int(operation_arg[0][1:])
-                    self.end(transaction_id)
+                    self.end(transaction_id, time)
 
                 elif operation_name == "fail":
                     if len(operation_arg) != 1:
@@ -115,7 +115,8 @@ class TransactionManager:
                     self.recover(site_id)
 
                 else:
-                    errmsg = "error: can not recognize operation name: [" + operation_name + "] in line " + str(line_num)
+                    errmsg = "error: can not recognize operation name: [" + operation_name
+                    errmsg += "] in line " + str(line_num)
                     raise ValueError(errmsg)
 
             except ValueError as err:
@@ -133,26 +134,46 @@ class TransactionManager:
     def read(self, transaction_id, variable_id):
         msg = "T"+str(transaction_id)+" read x"+str(variable_id)
         print(msg)
-        read_result = self.DM.read(variable_id)
+        _ro = self.transaction_list[transaction_id].ro
+        read_result = self.DM.read(transaction_id, variable_id, _ro)
         if read_result[0]:
-            site_touched = read_result[1]
-            self.transaction_list[transaction_id].touch_set.add(site_touched)
+            sites_touched = read_result[1]
+            self.transaction_list[transaction_id].touch_set.add(sites_touched)
         else:
-            blocker = read_result[1]
-            if transaction_id in self.wait_table:
-                self.wait_table[transaction_id].append(blocker)
-            else:
-                self.wait_table[transaction_id] = [blocker]
-            if blocker in self.block_table:
-                self.block_table[blocker].append(transaction_id)
-            else:
-                self.block_table[blocker] =[transaction_id]
+            blockers = read_result[1]
+            for blocker in blockers:
+                if transaction_id in self.wait_table:
+                    self.wait_table[transaction_id].append(blocker)
+                else:
+                    self.wait_table[transaction_id] = [blocker]
+                if blocker in self.block_table:
+                    self.block_table[blocker].append(transaction_id)
+                else:
+                    self.block_table[blocker] = [transaction_id]
             self.transaction_list[transaction_id].status = "read"
-            self.transaction_list[transaction_id].query_buffer = [transaction_id, variable_id]
+            self.transaction_list[transaction_id].query_buffer = [variable_id]
 
     def write(self, transaction_id, variable_id, value):
         msg = "T"+str(transaction_id)+" write x"+str(variable_id)+" as "+str(value)
         print(msg)
+        write_result = self.DM.write(transaction_id, variable_id, value)
+        if write_result[0]:
+            sites_touched = write_result[1]
+            self.transaction_list[transaction_id].touch_set.add(sites_touched)
+            self.transaction_list[transaction_id].commit_list[transaction_id] = value
+        else:
+            blockers = write_result[1]
+            for blocker in blockers:
+                if transaction_id in self.wait_table:
+                    self.wait_table[transaction_id].append(blocker)
+                else:
+                    self.wait_table[transaction_id] = [blocker]
+                if blocker in self.block_table:
+                    self.block_table[blocker].append(transaction_id)
+                else:
+                    self.block_table[blocker] = [transaction_id]
+            self.transaction_list[transaction_id].status = "write"
+            self.transaction_list[transaction_id].query_buffer = [variable_id, value]
 
     def dump(self, site=None, variable=None):
         print("TM phase: ")
@@ -167,9 +188,17 @@ class TransactionManager:
             print(msg)
         self.DM.dump(site, variable)
 
-    def end(self, transaction_id):
+    def end(self, transaction_id, sys_time):
         msg = "end T"+str(transaction_id)
         print(msg)
+        trans = self.transaction_list[transaction_id]
+        sites_touched = trans.touch_set
+        start_time = trans.start_time
+        end_time = sys_time
+        if self.DM.validation(sites_touched, start_time, end_time):
+            self.DM.commit(trans.commit_list)
+        else:
+            self.abort(transaction_id)
 
     def fail(self, site_id):
         msg = "site "+str(site_id)+" failed"
@@ -211,9 +240,9 @@ class TransactionManager:
                                 while cur != f:
                                     if self.transaction_list[cur].time > self.transaction_list[youngest_transaction].time:
                                         youngest_transaction = cur
-                                    for next in self.wait_table[cur]:
-                                        if visited[next] == 1:
-                                            cur = next
+                                    for next_trans in self.wait_table[cur]:
+                                        if visited[next_trans] == 1:
+                                            cur = next_trans
                                 print("Prey located, let's sacrifice transaction "+str(youngest_transaction))
                                 self.abort(youngest_transaction)
                             elif visited[c] == 0:
@@ -226,11 +255,11 @@ class TransactionManager:
 if __name__ == "__main__":
     TM = TransactionManager()
     TM.parser("input")
-    TM.wait_table[1] = [2, 4]
-    TM.wait_table[2] = [3]
-    TM.wait_table[3] = [1]
-    TM.wait_table[4] = [3]
+    # TM.wait_table[1] = [2, 4]
+    # TM.wait_table[2] = [3]
+    # TM.wait_table[3] = [1]
+    # TM.wait_table[4] = [3]
     # TM.wait_table[3] = [4]
     TM.deadlock_detection()
-    # for t in TM.transaction_list:
-    #     print(TM.transaction_list[t])
+    print(TM.block_table)
+    print(TM.wait_table)

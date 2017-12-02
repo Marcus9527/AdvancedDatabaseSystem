@@ -9,7 +9,7 @@ class Transaction:
         # site touched by this transaction, used for validation during commit
         # read-only transaction don't need touch_set
         self.touch_set = set([])
-        self.time = _time
+        self.start_time = _time
         self.status = "Normal"
         self.query_buffer = []
 
