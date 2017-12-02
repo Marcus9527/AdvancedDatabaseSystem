@@ -20,7 +20,7 @@ class DataManager:
     def fail(self, site_id):
         pass
 
-    # return either (success, read_from_site) or (fail, blocked_by)
+    # return either (success, read_from_site) or (fail, blocker)
     def read(self, transaction_id, variable_id, ro):
         success = False
         if success:
@@ -28,6 +28,9 @@ class DataManager:
         else:
             return False, [5]
 
+    # if success return (True, write_from_site)
+    # else return (False, blocker)
+    # (blocker = -1 means all sites storing that variable is failed)
     def write(self, transaction_id, variable_id, value):
         success = False
         if success:
@@ -43,6 +46,9 @@ class DataManager:
         else:
             return False
 
+    # new_data is a dict
+    # eg: 1:102, 2:300, 7:50
+    # means update value of x1 to 102, x2 to 300 and x7 to 50
     def commit(self, new_data):
         pass
 
