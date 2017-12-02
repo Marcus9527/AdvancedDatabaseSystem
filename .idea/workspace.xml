@@ -1,12 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="c3f20060-a5a7-426e-8958-00487968e07e" name="Default" comment="">
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/datamanager.py" afterPath="$PROJECT_DIR$/datamanager.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/input" afterPath="$PROJECT_DIR$/input" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/transaction.py" afterPath="$PROJECT_DIR$/transaction.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/transaction_manager.py" afterPath="$PROJECT_DIR$/transaction_manager.py" />
-    </list>
+    <list default="true" id="c3f20060-a5a7-426e-8958-00487968e07e" name="Default" comment="" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -24,7 +19,7 @@
           <file leaf-file-name="transaction_manager.py" pinned="false" current-in-tab="true">
             <entry file="file://$PROJECT_DIR$/transaction_manager.py">
               <provider selected="true" editor-type-id="text-editor">
-                <state relative-caret-position="123">
+                <state relative-caret-position="-536">
                   <caret line="200" column="38" lean-forward="true" selection-start-line="200" selection-start-column="38" selection-end-line="200" selection-end-column="38" />
                   <folding>
                     <element signature="e#0#9#0" expanded="true" />
@@ -250,7 +245,7 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/transaction_manager.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="123">
+        <state relative-caret-position="-536">
           <caret line="200" column="38" lean-forward="true" selection-start-line="200" selection-start-column="38" selection-end-line="200" selection-end-column="38" />
           <folding>
             <element signature="e#0#9#0" expanded="true" />
