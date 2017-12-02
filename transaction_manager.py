@@ -32,6 +32,8 @@ class TransactionManager:
             time += 1
             print("\n"+str(time)+">>>")
             self.deadlock_detection()
+            # try to resurrect transaction blocked by failed site
+            self.resurrect()
             try:
                 line = line.strip('\n')
                 operation = re.split('[()]', line)
@@ -146,16 +148,16 @@ class TransactionManager:
                 self.transaction_list[transaction_id].lock_list[variable_id] = 'r'
         # blocked
         else:
-            blockers = read_result[1]
             if variable_id in self.data_wait_table:
                 self.data_wait_table[variable_id].append(transaction_id)
             else:
-                self.data_wait_table[variable_id] = transaction_id
+                self.data_wait_table[variable_id] = [transaction_id]
+            blockers = read_result[1]
             for blocker in blockers:
                 if transaction_id in self.transaction_wait_table:
-                    self.transaction_wait_table[transaction_id].append(blocker)
+                    self.transaction_wait_table[transaction_id].add(blocker)
                 else:
-                    self.transaction_wait_table[transaction_id] = [blocker]
+                    self.transaction_wait_table[transaction_id] = set([blocker])
                 if blocker in self.block_table:
                     self.block_table[blocker].append(transaction_id)
                 else:
@@ -181,9 +183,9 @@ class TransactionManager:
             blockers = write_result[1]
             for blocker in blockers:
                 if transaction_id in self.transaction_wait_table:
-                    self.transaction_wait_table[transaction_id].append(blocker)
+                    self.transaction_wait_table[transaction_id].add(blocker)
                 else:
-                    self.transaction_wait_table[transaction_id] = [blocker]
+                    self.transaction_wait_table[transaction_id] = set([blocker])
                 if blocker in self.block_table:
                     self.block_table[blocker].append(transaction_id)
                 else:
@@ -288,29 +290,50 @@ class TransactionManager:
                         stack.pop()
 
     def release_locks(self, transaction_id):
+        msg = "release lock hold by T"+str(transaction_id)+" and give them to other blocked transactions"
+        print(msg)
         locks = self.transaction_list[transaction_id].lock_list
         free_datas = self.DM.release_locks(transaction_id, locks)
         for free_data in free_datas:
             if free_data in self.data_wait_table:
                 # some transaction(s) is/are waiting for this data to be freed
                 next_transaction = self.data_wait_table[free_data][0]
-                if self.transaction_list[next_transaction].status == 'write':
+                if self.transaction_list[next_transaction].status == "write":
                     value = self.transaction_list[next_transaction].query_buffer[1]
                     self.write(next_transaction, free_data, value)
-                    self.transaction_list[next_transaction].status = 'normal'
+                    self.transaction_list[next_transaction].status = "normal"
                     del self.data_wait_table[free_data][0]
-                elif self.transaction_list[next_transaction].status == 'read':
+                elif self.transaction_list[next_transaction].status == "read":
                     while self.data_wait_table[free_data] and self.transaction_list[next_transaction].status == 'read':
                         self.read(next_transaction, free_data)
-                        self.transaction_list[next_transaction].status = 'normal'
+                        self.transaction_list[next_transaction].status = "normal"
                         del self.data_wait_table[free_data][0]
                 # if there's no anyone else waiting for this free data
                 if not self.data_wait_table[free_data]:
                     del self.data_wait_table[free_data]
 
+    def resurrect(self):
+        msg = "resurrect transactions blocked by failed site"
+        print(msg)
+        if -1 in self.block_table:
+            for i, trans_id in enumerate(self.block_table[-1]):
+                if self.transaction_list[trans_id].status == "read":
+                    variable_id = self.transaction_list[trans_id].query_buffer[0]
+                    del self.block_table[-1][i]
+                    self.read(trans_id, variable_id)
+                else:
+                    variable_id = self.transaction_list[trans_id].query_buffer[0]
+                    value = self.transaction_list[trans_id].query_buffer[0]
+                    del self.block_table[-1][i]
+                    self.write(trans_id, variable_id, value)
+
 
 if __name__ == "__main__":
     TM = TransactionManager()
+    # TM.block_table[-1] = [9]
+    # TM.transaction_list[9] = transaction.Transaction(9, 100)
+    # TM.transaction_list[9].status = "read"
+    # TM.transaction_list[9].query_buffer = [200]
     TM.parser("input")
     # TM.wait_table[1] = [2, 4]
     # TM.wait_table[2] = [3]

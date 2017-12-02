@@ -26,7 +26,7 @@ class DataManager:
         if success:
             return True, [10]
         else:
-            return False, [5]
+            return False, [1, 2]
 
     # if success return (True, write_from_site)
     # else return (False, blocker)
