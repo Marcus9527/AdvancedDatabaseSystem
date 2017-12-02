@@ -17,7 +17,7 @@ class TransactionManager:
         # transaction_index(a) : [transaction_index(b)] a wait bi
         self.wait_table = {}
 
-        # transaction_index(b) : [transaction_index(ai),variable_index(xi)] (sequential list) b block ai on xi
+        # transaction_index(b) : [transaction_index(ai)] (sequential list) b block ai
         self.block_table = {}
         self.DM = dm.DataManager()
 
@@ -133,6 +133,22 @@ class TransactionManager:
     def read(self, transaction_id, variable_id):
         msg = "T"+str(transaction_id)+" read x"+str(variable_id)
         print(msg)
+        read_result = self.DM.read(variable_id)
+        if read_result[0]:
+            site_touched = read_result[1]
+            self.transaction_list[transaction_id].touch_set.add(site_touched)
+        else:
+            blocker = read_result[1]
+            if transaction_id in self.wait_table:
+                self.wait_table[transaction_id].append(blocker)
+            else:
+                self.wait_table[transaction_id] = [blocker]
+            if blocker in self.block_table:
+                self.block_table[blocker].append(transaction_id)
+            else:
+                self.block_table[blocker] =[transaction_id]
+            self.transaction_list[transaction_id].status = "read"
+            self.transaction_list[transaction_id].query_buffer = [transaction_id, variable_id]
 
     def write(self, transaction_id, variable_id, value):
         msg = "T"+str(transaction_id)+" write x"+str(variable_id)+" as "+str(value)

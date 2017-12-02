@@ -19,3 +19,11 @@ class DataManager:
 
     def fail(self, site_id):
         pass
+
+    # return either (success, read_from_site) or (fail, blocked_by)
+    def read(self, variable_id):
+        success = False
+        if success:
+            return True, 10
+        else:
+            return False, 5

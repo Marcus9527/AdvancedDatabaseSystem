@@ -10,6 +10,8 @@ class Transaction:
         # read-only transaction don't need touch_set
         self.touch_set = set([])
         self.time = _time
+        self.status = "Normal"
+        self.query_buffer = []
 
     def __str__(self):
         s = "transaction id: "+str(self.id)
