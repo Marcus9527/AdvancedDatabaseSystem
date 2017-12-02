@@ -158,10 +158,12 @@ class TransactionManager:
     def fail(self, site_id):
         msg = "site "+str(site_id)+" failed"
         print(msg)
+        self.DM.fail(site_id)
 
     def recover(self, site_id):
         msg = "recover site " + str(site_id)
         print(msg)
+        self.DM.recover(site_id)
 
     def abort(self, transaction_id):
         msg = "abort transaction "+str(transaction_id)
@@ -208,11 +210,11 @@ class TransactionManager:
 if __name__ == "__main__":
     TM = TransactionManager()
     TM.parser("input")
-    TM.wait_table[1] = [2,4]
+    TM.wait_table[1] = [2, 4]
     TM.wait_table[2] = [3]
     TM.wait_table[3] = [1]
     TM.wait_table[4] = [3]
     # TM.wait_table[3] = [4]
     TM.deadlock_detection()
-    for t in TM.transaction_list:
-        print(TM.transaction_list[t])
+    # for t in TM.transaction_list:
+    #     print(TM.transaction_list[t])

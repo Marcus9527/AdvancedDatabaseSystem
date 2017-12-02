@@ -13,3 +13,9 @@ class DataManager:
         else:
             msg = "dump data on site "+str(site)
             print(msg)
+
+    def recover(self, site_id):
+        pass
+
+    def fail(self, site_id):
+        pass
