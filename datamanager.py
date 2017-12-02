@@ -21,7 +21,7 @@ class DataManager:
         pass
 
     # return either (success, read_from_site) or (fail, blocker)
-    def read(self, transaction_id, variable_id, ro):
+    def read(self, transaction_id, variable_id, ro, version, sys_time):
         success = False
         if success:
             return True, [10]
