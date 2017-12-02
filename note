@@ -1,0 +1,38 @@
+Q:
+2. validation at commit time
+    check if touched set has failed site
+++3. Deadlock detection need not happen at every tick. When it does, it should happen at the "beginning of the tick".
+4. how to implement multiversion read consistency
+    keep multi version in data
+5. If no relevant site is available, then T must wait. wait for what?
+    recover
+++6. when multiple data exists, which one to chose for reading?
+    In case the site we read from failed later, we need to abort the transaction
+++7. is test as small as sample?
+
+* If a site in touch set is down, then abort (RO need no do this)
+
+* Available Copies
+	--	Read from one copy
+	--	Write to all copies
+
+* strict two phase locking
+	--	read and write locks
+	Get locks as you need them, but don’t release them until the end.
+
+* validation at commit time
+	At Commit time: For two phase locked transactions, ensure that all servers that you accessed (read or write) have been up since the first time they were accessed. Otherwise, abort. (Note: Read-only trans-actions need not abort in this case.)
+
+No transaction will have more than one wait.
+
+class:
+
+transaction
+
+transaction manager
+
+lock table
+
+wait table
+
+variable distribution
