@@ -9,7 +9,6 @@ Q:
 ++6. when multiple data exists, which one to chose for reading?
     In case the site we read from failed later, we need to abort the transaction
 ++7. is test as small as sample?
-++8. will read only transaction be blocked by write lock?
 
 * If a site in touch set is down, then abort (RO need no do this)
 
@@ -37,7 +36,3 @@ lock table
 wait table
 
 variable distribution
-
-lock can be promoted, eg:
-    R(T1,x1) read lock
-    W(T1,x1) promote to write lock
