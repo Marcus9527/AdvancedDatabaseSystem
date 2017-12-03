@@ -19,7 +19,7 @@ def parser(input_file):
                 operation_arg = re.split(',', operation[1])
 
             if operation_name == "begin":
-                pass
+                pass;
             elif operation_name == "beginRO":
                 pass
             elif operation_name == "R":
