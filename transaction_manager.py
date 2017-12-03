@@ -1,7 +1,7 @@
 import re
 import transaction
-import lock
-import datamanager as dm
+import Lock
+import DataManager as dm
 
 
 class TransactionManager:
@@ -12,7 +12,7 @@ class TransactionManager:
         # variable_index : lock
         self.lock_table = []
         for i in range(0, 20):
-            self.lock_table.append(lock.Lock())
+            self.lock_table.append(Lock.Lock())
 
         # transaction_index(a) : [transaction_index(b)] a wait bi
         self.wait_table = {}
