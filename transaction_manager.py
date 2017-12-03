@@ -255,6 +255,10 @@ class TransactionManager:
             del self.transaction_wait_table[transaction_id]
         if transaction_id in self.block_table:
             del self.block_table[transaction_id]
+        for data in self.data_wait_table:
+            for i, t_id in enumerate(self.data_wait_table[data]):
+                if t_id == transaction_id:
+                    del self.data_wait_table[data][i]
 
     def deadlock_detection(self):
         msg = "detecting deadlock"
@@ -271,10 +275,9 @@ class TransactionManager:
                     f = stack[-1]
                     if visited[f] == 0 and f in self.transaction_wait_table:
                         visited[f] = 1
-                        for c in self.transaction_wait_table[f]:
+                        for i, c in enumerate(self.transaction_wait_table[f]):
                             if c not in self.transaction_list:
-                                continue
-                        # c = self.wait_table[f][0]
+                                del self.transaction_wait_table[f][i]
                             if visited[c] == 1:
                                 print("There's a circle. Let the killing begin")
                                 cur = c
