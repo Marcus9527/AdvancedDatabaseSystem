@@ -1,3 +1,2 @@
-# Distributed Database System - Replicated Concurrency Control and Re-covery (RepCRec)
-Project for Advanced Database Systems course, with multiversion concurrency control, deadlock detection, replication, and
-failure recovery.
+# Distributed Multiversion Replicated Concurrency Control and Recovery (RepCRec)
+This is the course project for Advanced Database Systems.
