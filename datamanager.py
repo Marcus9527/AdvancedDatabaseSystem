@@ -1,65 +1,89 @@
-class DataManager:
-    def __init__(self):
-        pass
+from Site import Site
+from transaction import Transaction
 
-    def dump(self, site=None, variable=None):
+# TODO: where to put waitQue?
+class DataManager:
+    database = []
+    def __init__(self):
+        for i in range(1,11):
+            self.database.append(Site(i))
+
+    def generateCacheForRO(self, transaction: Transaction):
+        for site in self.database:
+            for var in site.variables:
+                # TODO: if a transaction is RO, cache all available data??
+                transaction.cacheVarData(var)
+
+    def getRunningSites(self):
+        runningSites = []
+        for site in self.database:
+            if site.isUp():
+                runningSites.append(site.getSiteNum())
+
+        return runningSites
+
+    def readLock(self, ID, transaction, lockType):
+        siteNum = -1
+        for site in self.database:
+            # when it comes to read, must check whether readytoread (if failed):
+            if site.isUp() and site.isVariablePresent(ID) and site.isVariableReadyRead(ID)):
+                site.lockVar(ID, transaction, lockType)
+                return site.getSiteNum()
+        return siteNum
+
+    def writeLock(self, ID, transaction, lockType):
+        siteNum = -1
+        for site in self.database:
+            # write doesn't have to check writeready.
+            if site.isUp() and site.isVariablePresent(ID):
+                site.lockVar(ID, transaction, lockType)
+                return site.getSiteNum()
+        return siteNum
+
+    def checkReadClock(self, ID):
+        for site in self.database:
+            if site.isUp() and site.isVariablePresent(ID):
+                if (site.isVariableLocked(ID)
+						and (site.getLockType(ID) == Lock.WRITE || site
+								.getLockType(var) == Lock.READ)
+
+    def dump(self, siteNum=None, ID=None):
         print("DM phase:")
-        if site is None and variable is None:
+        if siteNum is None and ID is None:
             msg = "dump all data"
             print(msg)
-        elif site is None:
-            msg = "dump data x"+str(variable)+" from all site"
+            for site in self.database:
+                if site.isUp():
+                    print("Site number: ", site.getSiteNum())
+                    variables = site.getAllVariables()
+                    for ID in variables:
+                        var = variables[ID]
+                        print("Variable: ", var.getID(), ", Data: ", var.getData())
+
+        elif siteNum is None:
+            msg = "dump data " + str(ID) + " from all site"
             print(msg)
+            for site in self.database:
+                if site.isUp():
+                    print("Site number: ", site.getSiteNum())
+                    if site.isVariablePresent(ID):
+                        var = site.getVariable(ID)
+                        print("Variable: ", var.getID(), ", Data: ", var.getData())
+
         else:
-            msg = "dump data on site "+str(site)
+            msg = "dump data on site " + str(siteNum)
             print(msg)
+            site = self.database[siteNum-1]
+            if site.isUp():
+                print("Site number: ", site.getSiteNum())
+                variables = site.getAllVariables()
+                for ID in variables:
+                    var = variables[ID]
+                    print("Variable: ", var.getID(), ", Data: ", var.getData())
+
 
     def recover(self, site_id):
         pass
 
     def fail(self, site_id):
         pass
-
-    # return either (success, read_from_site) or (fail, blocker)
-    def read(self, transaction_id, variable_id, ro, version, sys_time):
-        success = False
-        if success:
-            return True, [10]
-        else:
-            return False, [1, 2]
-
-    # if success return (True, write_from_site)
-    # else return (False, blocker)
-    # (blocker = -1 means all sites storing that variable is failed)
-    def write(self, transaction_id, variable_id, value):
-        success = (value == 101 or value == 202)
-        if success:
-            return True, [1]
-        else:
-            if transaction_id == 1:
-                return False, [2]
-            else:
-                return False, [1]
-
-
-    # return True if no site in sites have failed during [start_time, end_time]
-    def validation(self, sites, start_time, end_time):
-        success = True
-        if success:
-            return True
-        else:
-            return False
-
-    # new_data is a dict
-    # eg: 1:102, 2:300, 7:50
-    # means update value of x1 to 102, x2 to 300 and x7 to 50
-    def commit(self, new_data):
-        print("[COMMIT: ]")
-        print(new_data)
-
-    # locks is a dict
-    # eg:   transaction_id = 2  locks = {3:'w', 5,'r'}
-    # mean release T2's write lock on x3 and read lock on x5
-    def release_locks(self, transaction_id, locks):
-        return [2]
-
