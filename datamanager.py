@@ -41,6 +41,7 @@ class DataManager:
             else:
                 return False, [1]
 
+
     # return True if no site in sites have failed during [start_time, end_time]
     def validation(self, sites, start_time, end_time):
         success = True
@@ -53,11 +54,12 @@ class DataManager:
     # eg: 1:102, 2:300, 7:50
     # means update value of x1 to 102, x2 to 300 and x7 to 50
     def commit(self, new_data):
-        pass
+        print("[COMMIT: ]")
+        print(new_data)
 
     # locks is a dict
     # eg:   transaction_id = 2  locks = {3:'w', 5,'r'}
     # mean release T2's write lock on x3 and read lock on x5
     def release_locks(self, transaction_id, locks):
-        return [3, 5]
+        return [2]
 

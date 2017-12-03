@@ -28,6 +28,8 @@ class TransactionManager:
         line_num = 0
         time = 0
         for line in lines:
+            for t_id in self.transaction_list:
+                print(self.transaction_list[t_id])
             line_num += 1
             time += 1
             print("\n"+str(time)+">>>")
@@ -180,6 +182,7 @@ class TransactionManager:
             # update lock info in transaction
             self.transaction_list[transaction_id].lock_list[variable_id] = 'w'
         else:
+            # print("write blocked")
             if variable_id in self.data_wait_table:
                 self.data_wait_table[variable_id].append(transaction_id)
             else:
@@ -194,7 +197,9 @@ class TransactionManager:
                     self.block_table[blocker].append(transaction_id)
                 else:
                     self.block_table[blocker] = [transaction_id]
+            # print(transaction_id)
             self.transaction_list[transaction_id].status = "write"
+            # print(self.transaction_list[transaction_id].status)
             self.transaction_list[transaction_id].query_buffer = [variable_id, value]
 
     def dump(self, site=None, variable=None):
@@ -259,6 +264,8 @@ class TransactionManager:
             for i, t_id in enumerate(self.data_wait_table[data]):
                 if t_id == transaction_id:
                     del self.data_wait_table[data][i]
+        for t_id in self.transaction_list:
+            print(self.transaction_list[t_id])
 
     def deadlock_detection(self, sys_time):
         msg = "detecting deadlock"
@@ -301,10 +308,12 @@ class TransactionManager:
         print(msg)
         locks = self.transaction_list[transaction_id].lock_list
         free_datas = self.DM.release_locks(transaction_id, locks)
+        print(self.data_wait_table)
         for free_data in free_datas:
             if free_data in self.data_wait_table:
                 # some transaction(s) is/are waiting for this data to be freed
                 next_transaction = self.data_wait_table[free_data][0]
+                # print(self.transaction_list[next_transaction].status)
                 if self.transaction_list[next_transaction].status == "write":
                     value = self.transaction_list[next_transaction].query_buffer[1]
                     self.write(next_transaction, free_data, value)

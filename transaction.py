@@ -17,10 +17,11 @@ class Transaction:
         self.ro_version = -1
 
     def __str__(self):
-        s = "transaction id: "+str(self.id)
+        s = "T"+str(self.id)
         if self.ro:
             s += "\ttype: ro"
         else:
             s += "\ttype: rw"
-        s += " start @ "+str(self.time)
+        s += "\t|\tstart @ "+str(self.start_time)
+        s += "\t|\tstatus : "+str(self.status)
         return s
