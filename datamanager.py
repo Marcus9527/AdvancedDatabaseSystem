@@ -32,11 +32,14 @@ class DataManager:
     # else return (False, blocker)
     # (blocker = -1 means all sites storing that variable is failed)
     def write(self, transaction_id, variable_id, value):
-        success = False
+        success = (value == 101 or value == 202)
         if success:
-            return True, [7]
+            return True, [1]
         else:
-            return False, [5]
+            if transaction_id == 1:
+                return False, [2]
+            else:
+                return False, [1]
 
     # return True if no site in sites have failed during [start_time, end_time]
     def validation(self, sites, start_time, end_time):
