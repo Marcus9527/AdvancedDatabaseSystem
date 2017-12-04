@@ -1,45 +1,39 @@
 class Lock:
     def __init__(self):
         # 0: not locked;
-        # 1: RO;
-        # 2: RW
+        # 1: Read;
+        # 2: Write;
         self.type = 0
-        self.locker_list = []
-        # [transaction,_type]
-        self.wait_list = []
+        # since var could have multiple Read locks
+        # transaction, locktype
+        self.lockerDict = {}
+        # # [transaction,_type]
+        # self.wait_list = []
 
-    def release(self):
-        self.type = 0
+    # def release(self):
+    #     self.type = 0
 
     # return 1: locked
     # return 0: waiting
-    def lock(self, _locker, _type):
-        if self.type == 0:
-            self.type = _type
-            self.locker_list = [_locker]
-            return "Locked"
-        elif self.type == 1:
-            if _type == 1:
-                self.locker_list.append(_locker)
-                return "Locked"
-            else:
-                self.wait_list.append(_locker)
-                return "Waiting"
-        else:
-            self.wait_list.append([_locker, _type])
-            return "Waiting"
+    # TODO: Transaction should have a global dict {trans, variable}?
+    # When add lock is called, we ensure that it is legal
+    def addLock(self, trans, lockType):
+        self.lockerDict[trans] = lockType
+
+    def removeLock(self, trans):
+        self.lockerDict.pop(trans)
 
     # release current lock and give it to next transaction waiting
     def promote(self):
         pass
 
-    def is_free(self):
+    def isFree(self):
         return self.type == 0
 
-    def get_type(self):
+    def getType(self):
         return self.type
 
-    def get_locker(self):
-        return self.locker_list
+    def getLocker(self):
+        return self.lockerDict.keys()
 
 

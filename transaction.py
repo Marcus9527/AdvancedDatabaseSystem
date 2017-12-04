@@ -14,6 +14,8 @@ class Transaction:
         self.query_buffer = []
         # datas locked by this transaction
         self.lock_list = {}
+        # key: ID, val: Value
+        self.cache = {}
         self.ro_version = -1
 
     def __str__(self):

@@ -1,5 +1,5 @@
 from datetime import datetime
-from variable import Variable
+from Variable import Variable
 from lock import Lock
 from transaction import Transaction
 
@@ -60,11 +60,8 @@ class Site:
         return self.lockTable[ID].type
 
     def lockVar(self, ID, transaction, lockType):
-        if transaction.ro:
-            return
-        else:
-            # TODO: in Lock:
-            self.lockTable[ID].addLock(transaction, lockType)
+        # TODO: in Lock:
+        self.lockTable[ID].addLock(transaction, lockType)
 
     def unLock(self, trans, ID):
         self.lockTable[ID].removeLock(trans)
@@ -78,7 +75,7 @@ class Site:
     def isUp(self):
         return self.isRunning
 
-    def isReadyAfterRec(self, ID):
+    def isVarValid(self, ID):
         return self.isReady[ID]
 
     def failSite(self):
