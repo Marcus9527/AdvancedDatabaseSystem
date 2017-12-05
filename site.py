@@ -52,10 +52,10 @@ class Site:
     #     return self.variables[ID].getData()
 
     def isVariableFree(self, ID):
-        if self.lockTable[ID].type != 0:
-            return False
-        else:
+        if self.lockTable[ID].type == 0:
             return True
+        else:
+            return False
 
     def getLockType(self, ID):
         return self.lockTable[ID].type

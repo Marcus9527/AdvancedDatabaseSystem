@@ -29,7 +29,7 @@ class DataManager:
                 variables = site.getAllVariables()
                 for var in variables:
                     if site.isVarValid(var):
-                        value = variables[var]
+                        value = variables[var].getData()
                         trans.cache[var] = value
 
     # def getRunningSites(self):
@@ -75,7 +75,7 @@ class DataManager:
                         # if write lock:
                         if ID in lockers:
                             # read a data where write lock by himself
-                            print('read(not read only) data which locked by himself: ', ID, '->', site.getAllVariables()[ID])
+                            print('read(not read only) data which locked by himself: ', ID, '->', site.getAllVariables()[ID].getData())
                             return (True, [site.getSiteNum()])
                         else:
                             # write locked by other:
@@ -84,7 +84,7 @@ class DataManager:
                     else:
                         # not locked or read lock:
                         site.lockVar(ID, trans.id, 1)
-                        print('get read lock and read(not read only) data: ', ID, '->', site.getAllVariables()[ID])
+                        print('get read lock and read(not read only) data: ', ID, '->', site.getAllVariables()[ID].getData())
                         return (True, [site.getSiteNum()])
 
             # have to wait for site recover or recovered site being update
@@ -213,10 +213,14 @@ class DataManager:
         freeVar = set()
         for varID in lockDict:
             sites = self.varSite[varID]
+            isFree = True
             for site in sites:
-                site.unLock(transID, varID)
-                if site.isVariableFree(varID):
-                    freeVar.add(varID)
+                if site.isUp():
+                    site.unLock(transID, varID)
+                    if not site.isVariableFree(varID):
+                        isFree = False
+            if isFree:
+                freeVar.add(varID)
         return freeVar
 
 

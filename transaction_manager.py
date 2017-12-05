@@ -138,7 +138,7 @@ class TransactionManager:
         self.transaction_list[transaction_id] = t
 
     def read(self, transaction_id, variable_id, sys_time):
-        msg = "T"+str(transaction_id)+" read x"+str(variable_id)
+        msg = "T"+str(transaction_id)+" attempt to read "+str(variable_id)
         print(msg)
         ro = self.transaction_list[transaction_id].ro
         ro_version = self.transaction_list[transaction_id].ro_version
@@ -151,6 +151,8 @@ class TransactionManager:
                 # variable is already locked by transaction
                 if variable_id not in self.transaction_list[transaction_id].lock_list:
                     self.transaction_list[transaction_id].lock_list[variable_id] = 'r'
+                if transaction_id in self.transaction_wait_table:
+                    del self.transaction_wait_table[transaction_id]
         # blocked
         else:
             # cache failed:
@@ -189,7 +191,7 @@ class TransactionManager:
                 self.transaction_list[transaction_id].query_buffer = [variable_id]
 
     def write(self, transaction_id, variable_id, value):
-        msg = "T"+str(transaction_id)+" write x"+str(variable_id)+" as "+str(value)
+        msg = "T"+str(transaction_id)+" attempt to write "+str(variable_id)+" as "+str(value)
         print(msg)
         write_result = self.DM.write(transaction_id, variable_id)
         if write_result[0]:
@@ -199,6 +201,8 @@ class TransactionManager:
             self.transaction_list[transaction_id].commit_list[variable_id] = value
             # update lock info in transaction
             self.transaction_list[transaction_id].lock_list[variable_id] = 'w'
+            if transaction_id in self.transaction_wait_table:
+                del self.transaction_wait_table[transaction_id]
         else:
             # print("write blocked")
             if variable_id in self.data_wait_table:
@@ -293,6 +297,7 @@ class TransactionManager:
     def deadlock_detection(self, sys_time):
         msg = "detecting deadlock"
         print(msg)
+        print(self.transaction_wait_table)
         # 0: not visited    1: visiting     2:finished
         visited = {}
         for t in self.transaction_list:
@@ -305,9 +310,11 @@ class TransactionManager:
                     f = stack[-1]
                     if visited[f] == 0 and f in self.transaction_wait_table:
                         visited[f] = 1
-                        for i, c in enumerate(self.transaction_wait_table[f]):
+                        for c in self.transaction_wait_table[f]:
+                            if c == -1:
+                                continue
                             if c not in self.transaction_list:
-                                del self.transaction_wait_table[f][i]
+                                self.transaction_wait_table[f].remove(c)
                             if visited[c] == 1:
                                 print("There's a circle. Let the killing begin")
                                 cur = c
@@ -384,5 +391,5 @@ if __name__ == "__main__":
     TM = TransactionManager()
     TM.parser("input")
     # TM.deadlock_detection(999)
-    # print(TM.block_table)
-    # print(TM.transaction_wait_table)
+    print(TM.block_table)
+    print(TM.transaction_wait_table)
