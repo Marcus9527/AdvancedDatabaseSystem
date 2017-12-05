@@ -9,19 +9,17 @@ class TransactionManager:
         # transaction_index : transaction
         self.transaction_list = {}
 
-        # # variable_index : lock
-        # self.lock_table = []
-        # for i in range(0, 20):
-        #     self.lock_table.append(lock.Lock())
-
         # transaction_index(a) : [transaction_index(b)] a wait bi
         self.transaction_wait_table = {}
         self.data_wait_table = {}
 
         # transaction_index(b) : [transaction_index(ai)] (sequential list) b block ai
         self.block_table = {}
+
         self.DM = dm.DataManager()
         self.fail_history = {}
+        self.final_result = {}
+        self.commit_summary = {}
 
     def parser(self, input_file):
         infile = open(input_file, 'r')
@@ -29,8 +27,6 @@ class TransactionManager:
         line_num = 0
         time = 0
         for line in lines:
-            for t_id in self.transaction_list:
-                print(self.transaction_list[t_id])
             line_num += 1
             time += 1
             print("\n"+str(time)+">>>")
@@ -124,10 +120,8 @@ class TransactionManager:
                     errmsg = "error: can not recognize operation name: [" + operation_name
                     errmsg += "] in line " + str(line_num)
                     raise ValueError(errmsg)
-                print("transaction_wait_table : ")
-                print(self.transaction_wait_table)
-                print("block_table : ")
-                print(self.block_table)
+
+                self.print_status()
 
             except ValueError as err:
                 print(err.args)
@@ -135,8 +129,8 @@ class TransactionManager:
     def begin(self, transaction_id, time, ro=False):
         msg = "begin T"+str(transaction_id)
         if ro:
-            msg += " read-only"
-        msg += " at "+str(time)
+            msg += "(read-only)"
+        msg += " @ tick "+str(time)
         print(msg)
         t = transaction.Transaction(transaction_id, time, _ro=ro)
         self.transaction_list[transaction_id] = t
@@ -145,9 +139,7 @@ class TransactionManager:
         msg = "T"+str(transaction_id)+" attempt to read "+str(variable_id)
         print(msg)
         ro = self.transaction_list[transaction_id].ro
-        ro_version = self.transaction_list[transaction_id].ro_version
         read_result = self.DM.read(self.transaction_list[transaction_id], variable_id)
-        # lock successful
         if read_result[0]:
             if not ro:
                 sites_touched = set(read_result[1])
@@ -200,17 +192,14 @@ class TransactionManager:
         print(msg)
         write_result = self.DM.write(transaction_id, variable_id)
         if write_result[0]:
-            print('write success!')
             sites_touched = set(write_result[1])
             self.transaction_list[transaction_id].touch_set |= sites_touched
             self.transaction_list[transaction_id].commit_list[variable_id] = value
             self.transaction_list[transaction_id].status = "normal"
-            # update lock info in transaction
             self.transaction_list[transaction_id].lock_list[variable_id] = 'w'
             if transaction_id in self.transaction_wait_table:
                 del self.transaction_wait_table[transaction_id]
         else:
-            # print("write blocked")
             if variable_id in self.data_wait_table:
                 self.data_wait_table[variable_id].append(transaction_id)
             else:
@@ -225,9 +214,7 @@ class TransactionManager:
                     self.block_table[blocker].append(transaction_id)
                 else:
                     self.block_table[blocker] = [transaction_id]
-            # print(transaction_id)
             self.transaction_list[transaction_id].status = "write"
-            # print(self.transaction_list[transaction_id].status)
             self.transaction_list[transaction_id].query_buffer = [variable_id, value]
 
     def dump(self, site=None, variable=None):
@@ -250,10 +237,11 @@ class TransactionManager:
         sites_touched = trans.touch_set
         start_time = trans.start_time
         end_time = sys_time
-        if self.validation(sites_touched, start_time, end_time):
-            self.commit(transaction_id, sys_time)
-        else:
+        if self.transaction_list[transaction_id].abort:
             self.abort(transaction_id, sys_time)
+        else:
+            self.commit(transaction_id, sys_time)
+
 
     def fail(self, site_id, sys_time):
         msg = "site "+str(site_id)+" failed"
@@ -263,6 +251,9 @@ class TransactionManager:
             self.fail_history[site_id].append(sys_time)
         else:
             self.fail_history[site_id] = [sys_time]
+        for transaction_id in self.transaction_list:
+            if site_id in self.transaction_list[transaction_id].touch_set:
+                self.transaction_list[transaction_id].abort = True
 
     def recover(self, site_id):
         msg = "recover site " + str(site_id)
@@ -281,6 +272,9 @@ class TransactionManager:
             del self.transaction_wait_table[transaction_id]
         if transaction_id in self.block_table:
             del self.block_table[transaction_id]
+        for var in trans.commit_list:
+            self.commit_summary[var] = trans.commit_list[var]
+        self.final_result[transaction_id] = "commit"
 
     def abort(self, transaction_id, sys_time):
         msg = "abort transaction "+str(transaction_id)
@@ -296,12 +290,10 @@ class TransactionManager:
             for i, t_id in enumerate(self.data_wait_table[data]):
                 if t_id == transaction_id:
                     del self.data_wait_table[data][i]
-
-        for t_id in self.transaction_list:
-            print(self.transaction_list[t_id])
+        self.final_result[transaction_id] = "abort"
 
     def deadlock_detection(self, sys_time):
-        msg = "detecting deadlock"
+        msg = "detecting deadlock @ tick "+str(sys_time)
         print(msg)
         # 0: not visited    1: visiting     2:finished
         visited = {}
@@ -347,12 +339,10 @@ class TransactionManager:
         print(msg)
         locks = self.transaction_list[transaction_id].lock_list
         free_datas = self.DM.releaseLocks(transaction_id, locks)
-        msg = "we are freed now! :"
+        msg = "newly freed data:"
         for fd in free_datas:
-            msg += str(fd)
+            msg += " "+str(fd)
         print(msg)
-        print("data_wait_table:")
-        print(self.data_wait_table)
         retry_list = []
         for free_data in free_datas:
             if free_data in self.data_wait_table:
@@ -364,25 +354,6 @@ class TransactionManager:
                 del self.data_wait_table[free_data]
         for tid in retry_list:
             self.retry(tid, sys_time)
-        # for free_data in free_datas:
-        #     # if free_data in self.data_wait_table:
-        #     if free_data in self.data_wait_table and self.data_wait_table[free_data]:
-        #         # some transaction(s) is/are waiting for this data to be freed
-        #         next_transaction = self.data_wait_table[free_data][0]
-        #         # print(self.transaction_list[next_transaction].status)
-        #         if self.transaction_list[next_transaction].status == "write":
-        #             value = self.transaction_list[next_transaction].query_buffer[1]
-        #             self.write(next_transaction, free_data, value)
-        #             self.transaction_list[next_transaction].status = "normal"
-        #             del self.data_wait_table[free_data][0]
-        #         elif self.transaction_list[next_transaction].status == "read":
-        #             while self.data_wait_table[free_data] and self.transaction_list[next_transaction].status == 'read':
-        #                 self.read(next_transaction, free_data, sys_time)
-        #                 self.transaction_list[next_transaction].status = "normal"
-        #                 del self.data_wait_table[free_data][0]
-        #         # if there's no anyone else waiting for this free data
-        #         if not self.data_wait_table[free_data]:
-        #             del self.data_wait_table[free_data]
 
     def resurrect(self, sys_time):
         msg = "resurrect transactions blocked by failed site"
@@ -414,9 +385,25 @@ class TransactionManager:
         elif self.transaction_list[transaction_id].status == "write":
             self.write(transaction_id, trans.query_buffer[0], trans.query_buffer[1])
 
+    def print_status(self):
+        print("transaction_wait_table : ", self.transaction_wait_table.__str__())
+        print("block_table            : ", self.block_table.__str__())
+        print("data_wait_table        : ", self.data_wait_table.__str__())
+        for t_id in self.transaction_list:
+            print(self.transaction_list[t_id])
+        print("fail_history           : ", self.fail_history.__str__())
+
+
+    def print_final_status(self):
+        print("\n[summary]")
+        for transaction_id in self.final_result:
+            print("T"+str(transaction_id)+" :", self.final_result[transaction_id])
+        for var in self.commit_summary:
+            print(var,"final value: ", self.commit_summary[var])
+
 
 if __name__ == "__main__":
     TM = TransactionManager()
     TM.parser("input")
-    # TM.deadlock_detection(999)
+    TM.print_final_status()
 

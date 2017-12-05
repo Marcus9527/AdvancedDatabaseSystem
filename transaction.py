@@ -16,7 +16,8 @@ class Transaction:
         self.lock_list = {}
         # key: ID, val: Value
         self.cache = {}
-        self.ro_version = -1
+        # should abort due to site failure
+        self.abort = False
 
     def __str__(self):
         s = "T"+str(self.id)
@@ -29,7 +30,7 @@ class Transaction:
         s += "\t|\ttouched_set: "
         for ts in self.touch_set:
             s += str(ts)+" "
-        s += "\t|\tlock_list"
+        s += "\t|\tvariable_locked: "
         for ld in self.lock_list:
             s += str(ld)+" "
         return s
