@@ -5,7 +5,7 @@ class Lock:
         # 2: Write;
         self.type = 0
         # since var could have multiple Read locks
-        # transaction, locktype
+        # transactionID, locktype
         self.lockerDict = {}
         # # [transaction,_type]
         # self.wait_list = []
@@ -17,16 +17,16 @@ class Lock:
     # return 0: waiting
     # TODO: Transaction should have a global dict {trans, variable}?
     # When add lock is called, we ensure that it is legal
-    def addLock(self, trans, lockType):
-        self.lockerDict[trans] = lockType
+    def addLock(self, transID, lockType):
+        self.lockerDict[transID] = lockType
+        self.type = lockType
 
-    def removeLock(self, trans):
-        if trans not in self.lockerDict:
-            print('Error, this trans {0} is not in lockDict'.format(trans))
-        else:
-            self.lockerDict.pop(trans)
+    def removeLock(self, transID):
+        if transID in self.lockerDict:
+            self.lockerDict.pop(transID)
             if not self.lockerDict:
                 self.type = 0
+
 
     # release current lock and give it to next transaction waiting
     def promote(self):
@@ -39,6 +39,6 @@ class Lock:
         return self.type
 
     def getLocker(self):
-        return self.lockerDict.keys()
+        return list(self.lockerDict.keys())
 
 

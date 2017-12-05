@@ -52,20 +52,20 @@ class Site:
     #     return self.variables[ID].getData()
 
     def isVariableFree(self, ID):
-        if self.lockTable[ID].type != 0:
-            return False
-        else:
+        if self.lockTable[ID].type == 0:
             return True
+        else:
+            return False
 
     def getLockType(self, ID):
         return self.lockTable[ID].type
 
-    def lockVar(self, ID, transaction, lockType):
+    def lockVar(self, ID, transID, lockType):
         # TODO: in Lock:
-        self.lockTable[ID].addLock(transaction, lockType)
+        self.lockTable[ID].addLock(transID, lockType)
 
-    def unLock(self, trans, ID):
-        self.lockTable[ID].removeLock(trans)
+    def unLock(self, transID, ID):
+        self.lockTable[ID].removeLock(transID)
 
     def getSiteNum(self):
         return self.siteNum
@@ -77,7 +77,7 @@ class Site:
         return self.isReady[ID]
 
     def writeVarVal(self, ID, val):
-        self.variables[ID] = val
+        self.variables[ID].setData(val)
 
     def failSite(self):
         self.isRunning = False

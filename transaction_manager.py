@@ -9,10 +9,10 @@ class TransactionManager:
         # transaction_index : transaction
         self.transaction_list = {}
 
-        # variable_index : lock
-        self.lock_table = []
-        for i in range(0, 20):
-            self.lock_table.append(lock.Lock())
+        # # variable_index : lock
+        # self.lock_table = []
+        # for i in range(0, 20):
+        #     self.lock_table.append(lock.Lock())
 
         # transaction_index(a) : [transaction_index(b)] a wait bi
         self.transaction_wait_table = {}
@@ -40,7 +40,7 @@ class TransactionManager:
             try:
                 line = line.strip('\n')
                 operation = re.split('[()]', line)
-                operation_name = operation[0]
+                operation_name = operation[0].strip()
 
                 if len(operation) < 2:
                     errmsg = "error: missing parameters for [" + operation_name + "] in line " + str(line_num)
@@ -53,7 +53,7 @@ class TransactionManager:
                         errmsg = "error: operation [begin] requires exactly 1 argument, "+str(len(operation_arg))
                         errmsg += " provided in line " + str(line_num)
                         raise ValueError(errmsg)
-                    transaction_id = int(operation_arg[0][1:])
+                    transaction_id = int(operation_arg[0].strip()[1:])
                     self.begin(transaction_id, time)
 
                 elif operation_name == "beginRO":
@@ -61,15 +61,15 @@ class TransactionManager:
                         errmsg = "error: operation [begin] requires exactly 1 argument, "+str(len(operation_arg))
                         errmsg += " provided in line " + str(line_num)
                         raise ValueError(errmsg)
-                    transaction_id = int(operation_arg[0][1:])
+                    transaction_id = int(operation_arg[0].strip()[1:])
                     self.begin(transaction_id, time, ro=True)
 
                 elif operation_name == "R":
                     if len(operation_arg) != 2:
                         errmsg = "error: operation [R] requires exactly 2 argument, "+str(len(operation_arg))
                         errmsg += " provided in line " + str(line_num)
-                    transaction_id = int(operation_arg[0][1:])
-                    variable_id = int(operation_arg[1][1:])
+                    transaction_id = int(operation_arg[0].strip()[1:])
+                    variable_id = operation_arg[1].strip()
                     self.read(transaction_id, variable_id, time)
 
                 elif operation_name == "W":
@@ -77,9 +77,9 @@ class TransactionManager:
                         errmsg = "error: operation [W] requires exactly 3 argument, "+str(len(operation_arg))
                         errmsg += " provided in line " + str(line_num)
                         raise ValueError(errmsg)
-                    transaction_id = int(operation_arg[0][1:])
-                    variable_id = int(operation_arg[1][1:])
-                    value = int(operation_arg[2])
+                    transaction_id = int(operation_arg[0].strip()[1:])
+                    variable_id = operation_arg[1].strip()
+                    value = int(operation_arg[2].strip())
                     self.write(transaction_id, variable_id, value)
 
                 elif operation_name == "dump":
@@ -90,10 +90,10 @@ class TransactionManager:
                     if len(operation_arg[0]) == 0:
                         self.dump()
                     elif operation_arg[0][0] == 'x':
-                        variable_id = int(operation_arg[0][1:])
+                        variable_id = operation_arg[0].strip()
                         self.dump(variable=variable_id)
                     else:
-                        site_id = int(operation_arg[0])
+                        site_id = int(operation_arg[0].strip())
                         self.dump(site=site_id)
 
                 elif operation_name == "end":
@@ -101,7 +101,7 @@ class TransactionManager:
                         errmsg = "error: operation [end] requires exactly 1 argument, "+str(len(operation_arg))
                         errmsg += " provided in line " + str(line_num)
                         raise ValueError(errmsg)
-                    transaction_id = int(operation_arg[0][1:])
+                    transaction_id = int(operation_arg[0].strip()[1:])
                     self.end(transaction_id, time)
 
                 elif operation_name == "fail":
@@ -109,7 +109,7 @@ class TransactionManager:
                         errmsg = "error: operation [fail] requires exactly 1 argument, "+str(len(operation_arg))
                         errmsg += " provided in line " + str(line_num)
                         raise ValueError(errmsg)
-                    site_id = int(operation_arg[0])
+                    site_id = int(operation_arg[0].strip())
                     self.fail(site_id, time)
 
                 elif operation_name == "recover":
@@ -117,7 +117,7 @@ class TransactionManager:
                         errmsg = "error: operation [fail] requires exactly 1 argument, "+str(len(operation_arg))
                         errmsg += " provided in line " + str(line_num)
                         raise ValueError(errmsg)
-                    site_id = int(operation_arg[0])
+                    site_id = int(operation_arg[0].strip())
                     self.recover(site_id)
 
                 else:
@@ -134,15 +134,15 @@ class TransactionManager:
             msg += " read-only"
         msg += " at "+str(time)
         print(msg)
-        t = transaction.Transaction(transaction_id, time)
+        t = transaction.Transaction(transaction_id, time, _ro=ro)
         self.transaction_list[transaction_id] = t
 
     def read(self, transaction_id, variable_id, sys_time):
-        msg = "T"+str(transaction_id)+" read x"+str(variable_id)
+        msg = "T"+str(transaction_id)+" attempt to read "+str(variable_id)
         print(msg)
         ro = self.transaction_list[transaction_id].ro
         ro_version = self.transaction_list[transaction_id].ro_version
-        read_result = self.DM.read(self.transaction_list[transaction_id], variable_id, ro, ro_version, sys_time)
+        read_result = self.DM.read(self.transaction_list[transaction_id], variable_id)
         # lock successful
         if read_result[0]:
             if not ro:
@@ -151,6 +151,8 @@ class TransactionManager:
                 # variable is already locked by transaction
                 if variable_id not in self.transaction_list[transaction_id].lock_list:
                     self.transaction_list[transaction_id].lock_list[variable_id] = 'r'
+                if transaction_id in self.transaction_wait_table:
+                    del self.transaction_wait_table[transaction_id]
         # blocked
         else:
             # cache failed:
@@ -189,15 +191,18 @@ class TransactionManager:
                 self.transaction_list[transaction_id].query_buffer = [variable_id]
 
     def write(self, transaction_id, variable_id, value):
-        msg = "T"+str(transaction_id)+" write x"+str(variable_id)+" as "+str(value)
+        msg = "T"+str(transaction_id)+" attempt to write "+str(variable_id)+" as "+str(value)
         print(msg)
-        write_result = self.DM.write(transaction_id, variable_id, value)
+        write_result = self.DM.write(transaction_id, variable_id)
         if write_result[0]:
+            print('write success!')
             sites_touched = set(write_result[1])
             self.transaction_list[transaction_id].touch_set |= sites_touched
-            self.transaction_list[transaction_id].commit_list[transaction_id] = value
+            self.transaction_list[transaction_id].commit_list[variable_id] = value
             # update lock info in transaction
             self.transaction_list[transaction_id].lock_list[variable_id] = 'w'
+            if transaction_id in self.transaction_wait_table:
+                del self.transaction_wait_table[transaction_id]
         else:
             # print("write blocked")
             if variable_id in self.data_wait_table:
@@ -285,12 +290,14 @@ class TransactionManager:
             for i, t_id in enumerate(self.data_wait_table[data]):
                 if t_id == transaction_id:
                     del self.data_wait_table[data][i]
+
         for t_id in self.transaction_list:
             print(self.transaction_list[t_id])
 
     def deadlock_detection(self, sys_time):
         msg = "detecting deadlock"
         print(msg)
+        print(self.transaction_wait_table)
         # 0: not visited    1: visiting     2:finished
         visited = {}
         for t in self.transaction_list:
@@ -303,9 +310,11 @@ class TransactionManager:
                     f = stack[-1]
                     if visited[f] == 0 and f in self.transaction_wait_table:
                         visited[f] = 1
-                        for i, c in enumerate(self.transaction_wait_table[f]):
+                        for c in self.transaction_wait_table[f]:
+                            if c == -1:
+                                continue
                             if c not in self.transaction_list:
-                                del self.transaction_wait_table[f][i]
+                                self.transaction_wait_table[f].remove(c)
                             if visited[c] == 1:
                                 print("There's a circle. Let the killing begin")
                                 cur = c
@@ -329,9 +338,14 @@ class TransactionManager:
         print(msg)
         locks = self.transaction_list[transaction_id].lock_list
         free_datas = self.DM.releaseLocks(transaction_id, locks)
+        msg = "we are freed now!"
+        for fd in free_datas:
+            msg += str(fd)
+        print(msg)
         print(self.data_wait_table)
         for free_data in free_datas:
-            if free_data in self.data_wait_table:
+            # if free_data in self.data_wait_table:
+            if free_data in self.data_wait_table and self.data_wait_table[free_data]:
                 # some transaction(s) is/are waiting for this data to be freed
                 next_transaction = self.data_wait_table[free_data][0]
                 # print(self.transaction_list[next_transaction].status)
@@ -376,6 +390,6 @@ class TransactionManager:
 if __name__ == "__main__":
     TM = TransactionManager()
     TM.parser("input")
-    TM.deadlock_detection(999)
+    # TM.deadlock_detection(999)
     print(TM.block_table)
     print(TM.transaction_wait_table)

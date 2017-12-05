@@ -1,7 +1,7 @@
 class Variable:
     def __init__(self, num):
         self.Idx = num
-        self.ID = str('x' + num)
+        self.ID = 'x' + str(num)
         self.data = num * 10
 
     def getID(self):

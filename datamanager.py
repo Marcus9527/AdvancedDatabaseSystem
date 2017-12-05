@@ -11,16 +11,17 @@ class DataManager:
         # global locakTable
         # map var to locks
         self.lockTable = {}
+        # 1-10 sites:
+        for i in range(1,11):
+            self.database.append(Site(i))
+
         # 1-20 variables:
         for i in range(1,21):
             self.lockTable["x" + str(i)] = Lock()  # TODO: it's never used
             if i % 2 == 0:
-                self.varSite["x" + str(i)] = [i for i in range(1,11)]
+                self.varSite["x" + str(i)] = [self.database[i-1] for i in range(1,11)]
             else:
-                self.varSite["x" + str(i)] = [(i + 1) % 10]
-        # 1-10 sites:
-        for i in range(1,11):
-            self.database.append(Site(i))
+                self.varSite["x" + str(i)] = [self.database[(i + 1) % 10 - 1]]
 
     def generateCacheForRO(self, trans):
         for site in self.database:
@@ -28,7 +29,7 @@ class DataManager:
                 variables = site.getAllVariables()
                 for var in variables:
                     if site.isVarValid(var):
-                        value = variables[var]
+                        value = variables[var].getData()
                         trans.cache[var] = value
 
     # def getRunningSites(self):
@@ -74,7 +75,7 @@ class DataManager:
                         # if write lock:
                         if ID in lockers:
                             # read a data where write lock by himself
-                            print('read(not read only) data which locked by himself: ', ID, '->', site.getAllVariables()[ID])
+                            print('read(not read only) data which locked by himself: ', ID, '->', site.getAllVariables()[ID].getData())
                             return (True, [site.getSiteNum()])
                         else:
                             # write locked by other:
@@ -82,48 +83,53 @@ class DataManager:
                             return (False, lockers)
                     else:
                         # not locked or read lock:
-                        site.lockVar(ID, trans, 1)
-                        print('get read lock and read(not read only) data: ', ID, '->', site.getAllVariables()[ID])
-                        return (True, site.getSiteNum())
+                        site.lockVar(ID, trans.id, 1)
+                        print('get read lock and read(not read only) data: ', ID, '->', site.getAllVariables()[ID].getData())
+                        return (True, [site.getSiteNum()])
 
             # have to wait for site recover or recovered site being update
             return (False, [-1])
 
-    def write(self, trans, ID):
+    def write(self, transID, ID):
         # in sum, the transaction could get the write lock only when the data is unlocked, or
         # locked by himself
+        print('varSite: {}'.format(self.varSite))
         sites = self.varSite[ID]
         blockers = set()
         couldWriteLock = True
         runningSite = 0
+        siteNums = []
         for site in sites:
             if site.isUp():
+                siteNums.append(site.getSiteNum())
                 runningSite += 1
                 lockers = site.lockTable[ID].getLocker()
                 # if write locked:
                 if site.getLockType(ID) == 2:
                     # writed locked by himself?
                     if ID in lockers:
-                        return (True, site.getSiteNum())
+                        couldWriteLock = True
                     else:
                         return (False, lockers)
                 elif site.getLockType(ID) == 1:
                     # read locked only by himself:
-                    if len(lockers) == 1 and lockers[0].id == trans.id:
+                    if len(lockers) == 1 and lockers[0] == transID:
                         continue
                     else:
                         couldWriteLock = False
                         # blockers could have himself
-                        for blocker in lockers:
-                            if blocker.id != trans.id:
-                                blockers.add(blocker)
+                        for blockerID in lockers:
+                            if blockerID != transID:
+                                blockers.add(blockerID)
         if runningSite == 0:
             # no running site, must wait for recovery
             return (False, [-1])
         elif couldWriteLock:
             for site in sites:
                 if site.isUp():
-                    site.lockVar(ID,trans,2)
+                    site.lockVar(ID,transID,2)
+            print('T2: asasjgfasjdgasjfas')
+            return (True, siteNums)
         else:
             return (False, list(blockers))
 
@@ -202,15 +208,19 @@ class DataManager:
                 site.writeVarVal(ID, val)
 
     # TODO: return unlocked variables?
-    def releaseLocks(self, trans, lockDict):
+    def releaseLocks(self, transID, lockDict):
         # what if some sites this data is read locked and some dont
-        freeVar = []
+        freeVar = set()
         for varID in lockDict:
             sites = self.varSite[varID]
+            isFree = True
             for site in sites:
-                site.unLock(trans, varID)
-                if site.isVariableFree(varID):
-                    freeVar.append((varID, site.getSiteNum()))
+                if site.isUp():
+                    site.unLock(transID, varID)
+                    if not site.isVariableFree(varID):
+                        isFree = False
+            if isFree:
+                freeVar.add(varID)
         return freeVar
 
 
@@ -225,7 +235,7 @@ class DataManager:
                     variables = site.getAllVariables()
                     for ID in variables:
                         var = variables[ID]
-                        print("Variable: ", var.getID(), ", Data: ", var.getData())
+                        print("Variable: ", ID, ", Data: ", var.getData())
 
         elif siteNum is None:
             msg = "dump data " + str(ID) + " from all site"
