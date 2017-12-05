@@ -148,6 +148,7 @@ class TransactionManager:
             if not ro:
                 sites_touched = set(read_result[1])
                 self.transaction_list[transaction_id].touch_set |= sites_touched
+                self.transaction_list[transaction_id].status = "normal"
                 # variable is already locked by transaction
                 if variable_id not in self.transaction_list[transaction_id].lock_list:
                     self.transaction_list[transaction_id].lock_list[variable_id] = 'r'
@@ -199,6 +200,7 @@ class TransactionManager:
             sites_touched = set(write_result[1])
             self.transaction_list[transaction_id].touch_set |= sites_touched
             self.transaction_list[transaction_id].commit_list[variable_id] = value
+            self.transaction_list[transaction_id].status = "normal"
             # update lock info in transaction
             self.transaction_list[transaction_id].lock_list[variable_id] = 'w'
             if transaction_id in self.transaction_wait_table:
@@ -297,6 +299,7 @@ class TransactionManager:
     def deadlock_detection(self, sys_time):
         msg = "detecting deadlock"
         print(msg)
+        print("transaction_wait_table : ")
         print(self.transaction_wait_table)
         # 0: not visited    1: visiting     2:finished
         visited = {}
@@ -310,11 +313,15 @@ class TransactionManager:
                     f = stack[-1]
                     if visited[f] == 0 and f in self.transaction_wait_table:
                         visited[f] = 1
+                        ghost_transaction_list = []
+                        for c in self.transaction_wait_table[f]:
+                            if c != -1 and c not in self.transaction_list:
+                                ghost_transaction_list.append(c)
+                        for ghost_transaction in ghost_transaction_list:
+                            self.transaction_wait_table[f].remove(ghost_transaction)
                         for c in self.transaction_wait_table[f]:
                             if c == -1:
                                 continue
-                            if c not in self.transaction_list:
-                                self.transaction_wait_table[f].remove(c)
                             if visited[c] == 1:
                                 print("There's a circle. Let the killing begin")
                                 cur = c
@@ -338,30 +345,42 @@ class TransactionManager:
         print(msg)
         locks = self.transaction_list[transaction_id].lock_list
         free_datas = self.DM.releaseLocks(transaction_id, locks)
-        msg = "we are freed now!"
+        msg = "we are freed now! :"
         for fd in free_datas:
             msg += str(fd)
         print(msg)
+        print("data_wait_table:")
         print(self.data_wait_table)
+        retry_list = []
         for free_data in free_datas:
-            # if free_data in self.data_wait_table:
-            if free_data in self.data_wait_table and self.data_wait_table[free_data]:
-                # some transaction(s) is/are waiting for this data to be freed
-                next_transaction = self.data_wait_table[free_data][0]
-                # print(self.transaction_list[next_transaction].status)
-                if self.transaction_list[next_transaction].status == "write":
-                    value = self.transaction_list[next_transaction].query_buffer[1]
-                    self.write(next_transaction, free_data, value)
-                    self.transaction_list[next_transaction].status = "normal"
-                    del self.data_wait_table[free_data][0]
-                elif self.transaction_list[next_transaction].status == "read":
-                    while self.data_wait_table[free_data] and self.transaction_list[next_transaction].status == 'read':
-                        self.read(next_transaction, free_data, sys_time)
-                        self.transaction_list[next_transaction].status = "normal"
-                        del self.data_wait_table[free_data][0]
-                # if there's no anyone else waiting for this free data
-                if not self.data_wait_table[free_data]:
-                    del self.data_wait_table[free_data]
+            if free_data in self.data_wait_table:
+                for tid in self.data_wait_table[free_data]:
+                    if tid not in retry_list:
+                        retry_list.append(tid)
+        for free_data in free_datas:
+            if free_data in self.data_wait_table:
+                del self.data_wait_table[free_data]
+        for tid in retry_list:
+            self.retry(tid)
+        # for free_data in free_datas:
+        #     # if free_data in self.data_wait_table:
+        #     if free_data in self.data_wait_table and self.data_wait_table[free_data]:
+        #         # some transaction(s) is/are waiting for this data to be freed
+        #         next_transaction = self.data_wait_table[free_data][0]
+        #         # print(self.transaction_list[next_transaction].status)
+        #         if self.transaction_list[next_transaction].status == "write":
+        #             value = self.transaction_list[next_transaction].query_buffer[1]
+        #             self.write(next_transaction, free_data, value)
+        #             self.transaction_list[next_transaction].status = "normal"
+        #             del self.data_wait_table[free_data][0]
+        #         elif self.transaction_list[next_transaction].status == "read":
+        #             while self.data_wait_table[free_data] and self.transaction_list[next_transaction].status == 'read':
+        #                 self.read(next_transaction, free_data, sys_time)
+        #                 self.transaction_list[next_transaction].status = "normal"
+        #                 del self.data_wait_table[free_data][0]
+        #         # if there's no anyone else waiting for this free data
+        #         if not self.data_wait_table[free_data]:
+        #             del self.data_wait_table[free_data]
 
     def resurrect(self, sys_time):
         msg = "resurrect transactions blocked by failed site"
@@ -385,6 +404,13 @@ class TransactionManager:
                     if start_time < fail_time < end_time:
                         return False
         return True
+
+    def retry(self, transaction_id):
+        trans = self.transaction_list[transaction_id]
+        if self.transaction_list[transaction_id].status == "read":
+            self.read(transaction_id, trans.query_buffer[0])
+        elif self.transaction_list[transaction_id].status == "write":
+            self.write(transaction_id, trans.query_buffer[0], trans.query_buffer[1])
 
 
 if __name__ == "__main__":
