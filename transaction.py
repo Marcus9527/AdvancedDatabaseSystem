@@ -26,4 +26,10 @@ class Transaction:
             s += "\ttype: rw"
         s += "\t|\tstart @ "+str(self.start_time)
         s += "\t|\tstatus : "+str(self.status)
+        s += "\t|\ttouched_set: "
+        for ts in self.touch_set:
+            s += str(ts)+" "
+        s += "\t|\tlock_list"
+        for ld in self.lock_list:
+            s += str(ld)+" "
         return s
