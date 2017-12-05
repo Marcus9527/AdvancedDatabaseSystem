@@ -1,5 +1,5 @@
 from datetime import datetime
-from variable import Variable
+from Variable import Variable
 from lock import Lock
 from transaction import Transaction
 
@@ -32,13 +32,14 @@ class Site:
     def getTime(self):
         return self.timeStamp
 
-    def isVariablePresent(self, ID):
-        if ID in self.variables:
-            return True
-        else:
-            return False
-    def isVariableReadyRead(self, ID):
-        return self.isReady[ID]
+    # def isVariablePresent(self, ID):
+    #     if ID in self.variables:
+    #         return True
+    #     else:
+    #         return False
+
+    # def isVariableReadyRead(self, ID):
+    #     return self.isReady[ID]
 
     def getAllVariables(self):
         return self.variables
@@ -47,30 +48,24 @@ class Site:
     def getVariable(self, ID):
         return self.variables[ID]
 
-    def getDataForVar(self, ID):
-        return self.variables[ID].getData()
+    # def getDataForVar(self, ID):
+    #     return self.variables[ID].getData()
 
-    def isVariableLocked(self, ID):
+    def isVariableFree(self, ID):
         if self.lockTable[ID].type != 0:
-            return True
-        else:
             return False
+        else:
+            return True
 
     def getLockType(self, ID):
         return self.lockTable[ID].type
 
     def lockVar(self, ID, transaction, lockType):
-        if transaction.ro:
-            return
-        else:
-            # TODO: in Lock:
-            self.lockTable[ID].addLock(transaction, lockType)
+        # TODO: in Lock:
+        self.lockTable[ID].addLock(transaction, lockType)
 
     def unLock(self, trans, ID):
         self.lockTable[ID].removeLock(trans)
-
-    def clearLockTable(self):
-        self.lockTable.clear()
 
     def getSiteNum(self):
         return self.siteNum
@@ -78,20 +73,38 @@ class Site:
     def isUp(self):
         return self.isRunning
 
-    def isReadyAfterRec(self, ID):
+    def isVarValid(self, ID):
         return self.isReady[ID]
+
+    def writeVarVal(self, ID, val):
+        self.variables[ID] = val
 
     def failSite(self):
         self.isRunning = False
         self.isRecovered = False
+        self.lockTable.clear()
         for var in self.isReady:
             self.isReady[var] = False
 
+    def isReplicated(self, ID):
+        num = int(ID[1:])
+        if num % 2 == 0:
+            return True
+        else:
+            return False
+
     def recoverSite(self):
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # reset timestamp:
+        self.timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         isRunning = True
-        for var in self.lockTable:
-            self.lockTable[var] = Lock()
+        for ID in self.lockTable:
+            self.lockTable[ID] = Lock()
+        # note the isReplicated() here!
+        for ID in self.isReady:
+            if not self.isReplicated(ID):
+                self.isReady[ID] = True
+            else:
+                self.isReady[ID] = False
 
 
 
