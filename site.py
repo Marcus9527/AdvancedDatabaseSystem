@@ -96,8 +96,8 @@ class Site:
     def recoverSite(self):
         # reset timestamp:
         self.timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        isRunning = True
-        for ID in self.lockTable:
+        self.isRunning = True
+        for ID in self.variables:
             self.lockTable[ID] = Lock()
         # note the isReplicated() here!
         for ID in self.isReady:

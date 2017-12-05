@@ -124,6 +124,10 @@ class TransactionManager:
                     errmsg = "error: can not recognize operation name: [" + operation_name
                     errmsg += "] in line " + str(line_num)
                     raise ValueError(errmsg)
+                print("transaction_wait_table : ")
+                print(self.transaction_wait_table)
+                print("block_table : ")
+                print(self.block_table)
 
             except ValueError as err:
                 print(err.args)
@@ -299,8 +303,6 @@ class TransactionManager:
     def deadlock_detection(self, sys_time):
         msg = "detecting deadlock"
         print(msg)
-        print("transaction_wait_table : ")
-        print(self.transaction_wait_table)
         # 0: not visited    1: visiting     2:finished
         visited = {}
         for t in self.transaction_list:
@@ -361,7 +363,7 @@ class TransactionManager:
             if free_data in self.data_wait_table:
                 del self.data_wait_table[free_data]
         for tid in retry_list:
-            self.retry(tid)
+            self.retry(tid, sys_time)
         # for free_data in free_datas:
         #     # if free_data in self.data_wait_table:
         #     if free_data in self.data_wait_table and self.data_wait_table[free_data]:
@@ -405,10 +407,10 @@ class TransactionManager:
                         return False
         return True
 
-    def retry(self, transaction_id):
+    def retry(self, transaction_id, sys_time):
         trans = self.transaction_list[transaction_id]
         if self.transaction_list[transaction_id].status == "read":
-            self.read(transaction_id, trans.query_buffer[0])
+            self.read(transaction_id, trans.query_buffer[0], sys_time)
         elif self.transaction_list[transaction_id].status == "write":
             self.write(transaction_id, trans.query_buffer[0], trans.query_buffer[1])
 
@@ -417,5 +419,4 @@ if __name__ == "__main__":
     TM = TransactionManager()
     TM.parser("input")
     # TM.deadlock_detection(999)
-    print(TM.block_table)
-    print(TM.transaction_wait_table)
+

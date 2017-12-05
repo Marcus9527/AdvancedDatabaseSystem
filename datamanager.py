@@ -103,6 +103,7 @@ class DataManager:
             if site.isUp():
                 siteNums.append(site.getSiteNum())
                 runningSite += 1
+                print('site num: ', site.getSiteNum())
                 lockers = site.lockTable[ID].getLocker()
                 # if write locked:
                 if site.getLockType(ID) == 2:
@@ -123,6 +124,7 @@ class DataManager:
                                 blockers.add(blockerID)
         if runningSite == 0:
             # no running site, must wait for recovery
+            print(transID, 'running site == 0')
             return (False, [-1])
         elif couldWriteLock:
             for site in sites:
