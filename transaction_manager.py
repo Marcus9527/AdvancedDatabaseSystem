@@ -21,6 +21,7 @@ class TransactionManager:
         # transaction_index(b) : [transaction_index(ai)] (sequential list) b block ai
         self.block_table = {}
         self.DM = dm.DataManager()
+        self.fail_history = {}
 
     def parser(self, input_file):
         infile = open(input_file, 'r')
@@ -109,7 +110,7 @@ class TransactionManager:
                         errmsg += " provided in line " + str(line_num)
                         raise ValueError(errmsg)
                     site_id = int(operation_arg[0])
-                    self.fail(site_id)
+                    self.fail(site_id, time)
 
                 elif operation_name == "recover":
                     if len(operation_arg) != 1:
@@ -141,25 +142,20 @@ class TransactionManager:
         print(msg)
         ro = self.transaction_list[transaction_id].ro
         ro_version = self.transaction_list[transaction_id].ro_version
-        read_result = self.DM.read(transaction_id, variable_id, ro, ro_version, sys_time)
-        # read only transaction will always success
-        if ro:
-            return
+        read_result = self.DM.read(self.transaction_list[transaction_id], variable_id, ro, ro_version, sys_time)
         # lock successful
         if read_result[0]:
-            sites_touched = set(read_result[1])
-            self.transaction_list[transaction_id].touch_set |= sites_touched
-            # variable is already locked by transaction
-            if variable_id not in self.transaction_list[transaction_id].lock_list:
-                self.transaction_list[transaction_id].lock_list[variable_id] = 'r'
+            if not ro:
+                sites_touched = set(read_result[1])
+                self.transaction_list[transaction_id].touch_set |= sites_touched
+                # variable is already locked by transaction
+                if variable_id not in self.transaction_list[transaction_id].lock_list:
+                    self.transaction_list[transaction_id].lock_list[variable_id] = 'r'
         # blocked
         else:
-            if variable_id in self.data_wait_table:
-                self.data_wait_table[variable_id].append(transaction_id)
-            else:
-                self.data_wait_table[variable_id] = [transaction_id]
-            blockers = read_result[1]
-            for blocker in blockers:
+            # cache failed:
+            if ro and read_result[1] == -1:
+                blocker = -1
                 if transaction_id in self.transaction_wait_table:
                     self.transaction_wait_table[transaction_id].add(blocker)
                 else:
@@ -168,8 +164,29 @@ class TransactionManager:
                     self.block_table[blocker].append(transaction_id)
                 else:
                     self.block_table[blocker] = [transaction_id]
-            self.transaction_list[transaction_id].status = "read"
-            self.transaction_list[transaction_id].query_buffer = [variable_id]
+                self.transaction_list[transaction_id].status = "read"
+                self.transaction_list[transaction_id].query_buffer = [variable_id]
+            # data not in cache:
+            elif ro and read_result[1] == -2:
+                self.abort(transaction_id)
+            else:
+                blockers = read_result[1]
+                if blockers[0] != -1:
+                    if variable_id in self.data_wait_table:
+                        self.data_wait_table[variable_id].append(transaction_id)
+                    else:
+                        self.data_wait_table[variable_id] = [transaction_id]
+                for blocker in blockers:
+                    if transaction_id in self.transaction_wait_table:
+                        self.transaction_wait_table[transaction_id].add(blocker)
+                    else:
+                        self.transaction_wait_table[transaction_id] = set([blocker])
+                    if blocker in self.block_table:
+                        self.block_table[blocker].append(transaction_id)
+                    else:
+                        self.block_table[blocker] = [transaction_id]
+                self.transaction_list[transaction_id].status = "read"
+                self.transaction_list[transaction_id].query_buffer = [variable_id]
 
     def write(self, transaction_id, variable_id, value):
         msg = "T"+str(transaction_id)+" write x"+str(variable_id)+" as "+str(value)
@@ -222,15 +239,19 @@ class TransactionManager:
         sites_touched = trans.touch_set
         start_time = trans.start_time
         end_time = sys_time
-        if self.DM.validation(sites_touched, start_time, end_time):
+        if self.validation(sites_touched, start_time, end_time):
             self.commit(transaction_id, sys_time)
         else:
             self.abort(transaction_id, sys_time)
 
-    def fail(self, site_id):
+    def fail(self, site_id, sys_time):
         msg = "site "+str(site_id)+" failed"
         print(msg)
         self.DM.fail(site_id)
+        if site_id in self.fail_history:
+            self.fail_history[site_id].append(sys_time)
+        else:
+            self.fail_history[site_id] = [sys_time]
 
     def recover(self, site_id):
         msg = "recover site " + str(site_id)
@@ -342,6 +363,14 @@ class TransactionManager:
                     value = self.transaction_list[trans_id].query_buffer[0]
                     del self.block_table[-1][i]
                     self.write(trans_id, variable_id, value)
+
+    def validation(self, sites_touched, start_time, end_time):
+        for site in sites_touched:
+            if site in self.fail_history:
+                for fail_time in self.fail_history[site]:
+                    if start_time < fail_time < end_time:
+                        return False
+        return True
 
 
 if __name__ == "__main__":
