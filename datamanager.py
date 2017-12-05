@@ -11,13 +11,14 @@ class DataManager:
         # global locakTable
         # map var to locks
         self.lockTable = {}
+        # 1-20 variables:
         for i in range(1,21):
-            self.lockTable["x" + str(i)] = Lock()
+            self.lockTable["x" + str(i)] = Lock()  # TODO: it's never used
             if i % 2 == 0:
                 self.varSite["x" + str(i)] = [i for i in range(1,11)]
             else:
-                self.varSite["x" + str(i)] = (i + 1) % 10
-
+                self.varSite["x" + str(i)] = [(i + 1) % 10]
+        # 1-10 sites:
         for i in range(1,11):
             self.database.append(Site(i))
 
@@ -46,7 +47,8 @@ class DataManager:
                     print('read only, data: ', ID, '->', trans.cache[ID])
                     return (True, [])
                 else:
-                    # abort
+                    # this is not the first read and the data is not present in cache
+                    # abort!
                     return (False, [-2])
             else:
                 # ID is the first read var
@@ -57,6 +59,8 @@ class DataManager:
                     print('read only, data: ', ID, '->', trans.cache[ID])
                     return (True, [])
                 else:
+                    # even the first one is not in the database, may be because the site fails or !isValidVar()
+                    # have to wait until valid
                     trans.cache.clear()
                     return (False, [-1])
         else:
@@ -86,6 +90,8 @@ class DataManager:
             return (False, [-1])
 
     def write(self, trans, ID):
+        # in sum, the transaction could get the write lock only when the data is unlocked, or
+        # locked by himself
         sites = self.varSite[ID]
         blockers = set()
         couldWriteLock = True
@@ -178,12 +184,34 @@ class DataManager:
     #             return True
     #     return False
 
+    # TODO: RO has commitList?
+    def commit(self, transId, commitList):
+        if len(commitList) == 0:
+            print('This transaction has nothing to commit')
+            return
+        else:
+            for ID, val in commitList.items():
+                self.writeValToDatabase(ID, val)
+                print('Transaction {0} changed variable {1} to {2}'.format(transId, ID, val))
+
+
     def writeValToDatabase(self, ID, val):
         sites = self.varSite[ID]
         for site in sites:
-            if site.isUp() and site.isVariablePresent(ID):
-                site.write()
+            if site.isUp():
+                site.writeVarVal(ID, val)
 
+    # TODO: return unlocked variables?
+    def releaseLocks(self, trans, lockDict):
+        # what if some sites this data is read locked and some dont
+        freeVar = []
+        for varID in lockDict:
+            sites = self.varSite[varID]
+            for site in sites:
+                site.unLock(trans, varID)
+                if site.isVariableFree(varID):
+                    freeVar.append((varID, site.getSiteNum()))
+        return freeVar
 
 
     def dump(self, siteNum=None, ID=None):
@@ -202,13 +230,12 @@ class DataManager:
         elif siteNum is None:
             msg = "dump data " + str(ID) + " from all site"
             print(msg)
-            for site in self.database:
+            sites = self.varSite[ID]
+            for site in sites:
                 if site.isUp():
                     print("Site number: ", site.getSiteNum())
-                    if site.isVariablePresent(ID):
-                        var = site.getVariable(ID)
-                        print("Variable: ", var.getID(), ", Data: ", var.getData())
-
+                    var = site.getVariable(ID)
+                    print("Variable: ", var.getID(), ", Data: ", var.getData())
         else:
             msg = "dump data on site " + str(siteNum)
             print(msg)
@@ -220,9 +247,18 @@ class DataManager:
                     var = variables[ID]
                     print("Variable: ", var.getID(), ", Data: ", var.getData())
 
+    def fail(self, siteNum):
+        site = self.database[siteNum-1]
+        if not site.isUp():
+            print('site: {0} is already down!'.format(siteNum))
+        else:
+            site.failSite()
+            print('The site {0} is down now!'.format(siteNum))
 
     def recover(self, siteNum):
-        pass
-
-    def fail(self, site_id):
-        pass
+        site = self.database[siteNum - 1]
+        if site.isUp():
+            print('site: {0} is already up!'.format(siteNum))
+        else:
+            site.recoverSite()
+            print('The site {0} is up now!'.format(siteNum))

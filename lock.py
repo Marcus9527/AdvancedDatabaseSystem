@@ -21,7 +21,12 @@ class Lock:
         self.lockerDict[trans] = lockType
 
     def removeLock(self, trans):
-        self.lockerDict.pop(trans)
+        if trans not in self.lockerDict:
+            print('Error, this trans {0} is not in lockDict'.format(trans))
+        else:
+            self.lockerDict.pop(trans)
+            if not self.lockerDict:
+                self.type = 0
 
     # release current lock and give it to next transaction waiting
     def promote(self):

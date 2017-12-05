@@ -13,7 +13,7 @@ class Variable:
     def getData(self):
         return self.data
 
-    def modifyData(self, newData):
+    def setData(self, newData):
         self.data = newData
 
     def setID(self, newID):
