@@ -1,8 +1,14 @@
-from site import Site
-from transaction import Transaction
-from lock import Lock
+# author    : Lei Guo
+# date      : Dec. 7, 2017
+# Data Manager do the work below:
+# 1. The database: list of 10 Sites
+# 2. (Attempt to) read/write: decide whether a certain transaction could or could not get the requested lock,
+# 3. Fail/Recovering a certain site
+# 4. Commit a certain transaction (write values to database)
+# 5. Dump the values required of the current database
 
-# TODO: Might need to put a global lock table here!!!
+from site import Site
+
 class DataManager:
     def __init__(self):
         self.database = []
@@ -10,19 +16,21 @@ class DataManager:
         self.varSite = {}
         # global locakTable
         # map var to locks
-        self.lockTable = {}
+        # self.lockTable = {}
         # 1-10 sites:
         for i in range(1,11):
             self.database.append(Site(i))
 
         # 1-20 variables:
         for i in range(1,21):
-            self.lockTable["x" + str(i)] = Lock()  # TODO: it's never used
+            # self.lockTable["x" + str(i)] = Lock()  # it's never used
             if i % 2 == 0:
                 self.varSite["x" + str(i)] = [self.database[i-1] for i in range(1,11)]
             else:
                 self.varSite["x" + str(i)] = [self.database[(i + 1) % 10 - 1]]
 
+    # for the read only transactions, cache all the current values of variables
+    # it may has overhead in space but it is efficient for accessing certain values for transactions.
     def generateCacheForRO(self, trans):
         for site in self.database:
             if site.isUp():
@@ -30,21 +38,18 @@ class DataManager:
                 for var in variables:
                     if site.isVarValid(var):
                         value = variables[var].getData()
+                        # add the variable's value to this transaction's cache
                         trans.cache[var] = value
 
-    # def getRunningSites(self):
-    #     runningSites = []
-    #     for site in self.database:
-    #         if site.isUp():
-    #             runningSites.append(site.getSiteNum())
-    #
-    #     return runningSites
-
+    # when the Transaction manager attempts to read from the database
+    # decide whether it could get the requested lock
+    # if true, return site numbers; if false, return blockers.
     def read(self,trans, ID):
         # first predicate whether need to cache:
         if trans.ro:
             if trans.cache:
                 if ID in trans.cache:
+                    # if already in cache
                     print('read only, data: ', ID, '->', trans.cache[ID])
                     return (True, [])
                 else:
@@ -55,7 +60,7 @@ class DataManager:
                 # ID is the first read var
                 # need to cache:
                 self.generateCacheForRO(trans)
-
+                # then retrieve the value from cache
                 if ID in trans.cache:
                     print('read only, data: ', ID, '->', trans.cache[ID])
                     return (True, [])
@@ -90,6 +95,9 @@ class DataManager:
             # have to wait for site recover or recovered site being update
             return (False, [-1])
 
+    # when the Transaction manager attempts to write to the database
+    # decide whether it could get the requested lock
+    # if true, return list of site numbers; if false, return blockers.
     def write(self, transID, ID):
         # in sum, the transaction could get the write lock only when the data is unlocked, or
         # locked by himself
@@ -130,86 +138,30 @@ class DataManager:
             for site in sites:
                 if site.isUp():
                     site.lockVar(ID,transID,2)
-            print('T2: asasjgfasjdgasjfas')
             return (True, siteNums)
         else:
             return (False, list(blockers))
 
-
-    # def readLock(self, ID, transaction, lockType):
-    #     siteNum = -1
-    #     for site in self.database:
-    #         # when it comes to read, must check whether readytoread (if failed):
-    #         if site.isUp() and site.isVariablePresent(ID) and site.isVariableReadyRead(ID):
-    #             site.lockVar(ID, transaction, lockType)
-    #             return site.getSiteNum()
-    #     return siteNum
-    #
-    # def writeLock(self, ID, transaction, lockType):
-    #     siteNum = -1
-    #     for site in self.database:
-    #         # write doesn't have to check writeready.
-    #         if site.isUp() and site.isVariablePresent(ID):
-    #             site.lockVar(ID, transaction, lockType)
-    #             return site.getSiteNum()
-    #     return siteNum
-
-    # def checkReadlock(self, ID):
-    #     sites = self.varSite[ID]
-    #     for site in sites:
-    #         if site.isUp() and site.isVariablePresent(ID) and site.isVariableReadyRead(ID):
-    #             if site.isVariableLocked(ID) and site.getLockType(ID) == 1:
-    #                 return True
-    #     return False
-    #
-    # def checkWriteLock(self, ID):
-    #     sites = self.varSite[ID]
-    #     for site in sites:
-    #         if site.isUp() and site.isVariablePresent(ID) and site.isVariableReadyRead(ID):
-    #             if site.isVariableLocked(ID) and site.getLockType(ID) == 2:
-    #                 return True
-    #     return False
-    #
-    # def checkReadWriteLock(self, ID):
-    #     sites = self.varSite[ID]
-    #     for site in sites:
-    #         if site.isUp() and site.isVariablePresent(ID) and site.isVariableReadyRead(ID):
-    #             if site.isVariableLocked(ID) and (site.getLockType(ID) == 2 or site.getLockType(ID) == 1):
-    #                 return True
-    #     return False
-    #
-    # def isVarAvailableForRead(self, ID):
-    #     sites = self.varSite[ID]
-    #     for site in sites:
-    #         if site.isUp() and site.isVariablePresent(ID) and site.isVariableReadyRead(ID):
-    #             return True
-    #     return False
-    #
-    # def isVarAvailableForWrite(self, ID):
-    #     sites = self.varSite[ID]
-    #     for site in sites:
-    #         if site.isUp() and site.isVariablePresent(ID):
-    #             return True
-    #     return False
-
-    # TODO: RO has commitList?
+    # commit a certain transaction
     def commit(self, transId, commitList):
         if len(commitList) == 0:
             print('This transaction has nothing to commit')
             return
         else:
+            # commit(write) all the values in the commitList
             for ID, val in commitList.items():
                 self.writeValToDatabase(ID, val)
                 print('Transaction {0} changed variable {1} to {2}'.format(transId, ID, val))
 
-
+    # called in commit
     def writeValToDatabase(self, ID, val):
         sites = self.varSite[ID]
         for site in sites:
             if site.isUp():
                 site.writeVarVal(ID, val)
 
-    # TODO: return unlocked variables?
+    # release locks after commit or abort.
+    # return variables which turned Free after the release
     def releaseLocks(self, transID, lockDict):
         # what if some sites this data is read locked and some dont
         freeVar = set()
@@ -220,15 +172,20 @@ class DataManager:
                 if site.isUp():
                     site.unLock(transID, varID)
                     if not site.isVariableFree(varID):
+                        # this variable should be free at each site
                         isFree = False
             if isFree:
                 freeVar.add(varID)
         return freeVar
 
-
+    # dump the values of variables
+    # includes: dump all data in the database;
+    # dump all data in a certain site;
+    # dump a certain variable in all sites;
     def dump(self, siteNum=None, ID=None):
         print("DM phase:")
         if siteNum is None and ID is None:
+            # dump all data in the database;
             msg = "dump all data"
             print(msg)
             for site in self.database:
@@ -240,6 +197,7 @@ class DataManager:
                         print("Variable: ", ID, ", Data: ", var.getData())
 
         elif siteNum is None:
+            # dump a certain variable in all sites;
             msg = "dump data " + str(ID) + " from all site"
             print(msg)
             sites = self.varSite[ID]
@@ -249,6 +207,7 @@ class DataManager:
                     var = site.getVariable(ID)
                     print("Variable: ", var.getID(), ", Data: ", var.getData())
         else:
+            # dump a certain variable in all sites;
             msg = "dump data on site " + str(siteNum)
             print(msg)
             site = self.database[siteNum-1]
@@ -259,6 +218,7 @@ class DataManager:
                     var = variables[ID]
                     print("Variable: ", var.getID(), ", Data: ", var.getData())
 
+    # fail a site
     def fail(self, siteNum):
         site = self.database[siteNum-1]
         if not site.isUp():
@@ -267,6 +227,7 @@ class DataManager:
             site.failSite()
             print('The site {0} is down now!'.format(siteNum))
 
+    # recover a site
     def recover(self, siteNum):
         site = self.database[siteNum - 1]
         if site.isUp():
