@@ -1,0 +1,148 @@
+Design documentation
+Author  :   Songnan Zhang, Lei Guo
+Data    :   Dec. 7, 2017
+
+---Part 1: Transaction Manager---
+Author: Songnan Zhang
+transaction.py
+<class>: Transaction
+    [data members]:
+
+        id (int)            :   transaction index
+
+        ro (bool)           :   read-only: True
+                                read-write: False
+
+        commit_list (dict)  :   data successfully writen by transaction
+                                key: ID, val: Value
+
+        touch_set (set)     :   site touched by this transaction, used for validation during commit
+
+        start_time (int)    :   transaction start time
+
+        status (str)        :   whether transaction is in wait
+                                'normal': transaction is not in wait
+                                'read'/'write': transaction is waiting for read/write lock
+
+        query_buffer (list) :   parameters for operation in wait
+                                status = 'read': query_buffer = [data_id]
+                                status = 'write': query_buffer = [data_id, value]
+
+        lock_list (dict)    :   data locked by this transaction
+                                key: ID, val: lock type('r'/'w')
+
+        cache (dict)        :   data cached for read-only transaction
+                                key: ID, val: Value
+
+        abort (bool)        :   should abort transaction due to site failure: True
+
+    [function members]:
+
+        __str__()
+            print transaction info and status
+            input: none
+            return: none
+
+transaction_manager.py
+<class>: TransactionManager
+    [data member]:
+
+        DM (DataManager)                :   DataManager object
+
+        transaction_list (dict)         :   key: transaction_ID, val: transaction
+
+        transaction_wait_table (dict)   :   key: transaction_ID(waiter), val: [transaction_ID(blocker)]
+
+        data_wait_table (dict)          :   key: data_ID, val: [transaction_ID(waiter)]
+
+        block_table (dict)              :   key: transaction_ID(blocker), val: [transaction_ID(waiter)]
+
+        fail_history (dict)             :   key: site_ID, val: [failure times]
+
+        final_result (dict)             :   key: transaction_ID, val: commit/abort
+
+        commit_summary (dict)           :   key: data_ID, val: last committed value
+
+    [function members]:
+
+        parser(input_file)
+            read and parse input files line by line and call corresponding functions
+            return - none
+
+        begin(transaction_id, time, ro=False)
+            create new transaction
+            return - none
+
+        read(transaction_id, variable_id, sys_time)
+            attempt to read and call DM.read
+            if read success - DM.read will return from which site is touched
+                            - transaction's lock_list will be updated
+            if read fail    - DM.read will return which transaction(s) is/are blocking
+                              data_wait_table, transaction_wait_table and block_table will be updated
+            return          - none
+
+        write(transaction_id, variable_id, value)
+            attempt to write and call DM.write
+            if write success - DM.write will return from which site is touched
+                             - transaction's lock_list and commit_list will be updated
+            if write fail    - DM.write will return which transaction(s) is/are blocking
+                               data_wait_table, transaction_wait_table and block_table will be updated
+            return           - none
+
+        dump(site=None, variable=None)
+            call DM.dump
+            return  - none
+
+        fail(site_id, sys_time)
+            call DM.fail, update fail_history
+            return  - none
+
+        recover(site_id)
+            call DM.dump
+            return  - none
+
+        end(transaction_id, sys_time)
+            check if transaction should be committed or aborted and call corresponding function
+            return  - none
+
+        commit(transaction_id, sys_time)
+            called by TransactionManager.end()
+            will call DM.commit and write committed value into available sites
+            then call TransactionManager.release_locks() to release data locked by transaction
+            and finally delete committed transaction
+            return  - none
+
+        abort(transaction_id, sys_time)
+            called by TransactionManager.end()
+            call TransactionManager.release_locks() to release data locked by transaction
+            and finally delete committed transaction
+            return  - none
+
+        deadlock_detection(sys_time)
+            check if there is a cycle in transaction_wait_table, if there is a cycle(deadlock), abort the youngest
+            return  - none
+
+        release_locks(transaction_id, sys_time)
+            called by commit or abort
+            call DM.release_locks and get newly freed data
+            distribute newly freed data to transactions in wait
+            return  - none
+
+        resurrect(sys_time)
+            retry transactions blocked by site failure
+            return  - none
+
+        validation(sites_touched, start_time, end_time)
+            check if any site touched by transaction during first read/write to end has failed
+            return : True - no site failure during time zone
+                     False - one or more site failure during time zone
+
+        retry(transaction_id, sys_time)
+            retry transaction in wait
+            return  - none
+
+        print_status()
+            return  - none
+
+        print_final_status()
+            return  - none
