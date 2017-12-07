@@ -2,21 +2,37 @@ class Transaction:
     def __init__(self, _id, _time, _ro=False):
         # transaction index
         self.id = _id
-        # read-only: True   read-write: False
+
+        # read-only: True
+        # read-write: False
         self.ro = _ro
+
+        # data successfully writen by transaction
+        # key: ID, val: Value
         self.commit_list = {}
-        self.locking = []
-        # site touched by this transaction, used for validation during commit
-        # read-only transaction don't need touch_set
+
+        # site touched by this transaction, used for validation during commit, ro transaction don't need touch_set
         self.touch_set = set([])
+
         self.start_time = _time
+
+        # 'normal': transaction is not blocked
+        # 'read'/'write': transaction is waiting for read/write lock
         self.status = "normal"
+
+        # parameters for operation in wait(blocked operation)
+        # for read operation: [data_id]
+        # for write operation: [data_id, value]
         self.query_buffer = []
-        # datas locked by this transaction
+
+        # data locked by this transaction
+        # key: ID, val: lock type('r'/'w')
         self.lock_list = {}
+
         # key: ID, val: Value
         self.cache = {}
-        # should abort due to site failure
+
+        # should abort transaction due to site failure
         self.abort = False
 
     def __str__(self):
