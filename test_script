@@ -1,0 +1,72 @@
+'''explain expected result for each test'''
+// test 1
+begin(T1)
+begin(T2)
+W(T1,x1,101)    x1 is free, write success, T1 write-lock x1
+W(T2,x2,202)    x2 is free, write success, T2 write-lock x2
+W(T1,x2,102)    x2 is not free, T1 wait T2 on x2
+W(T2,x1,201)    x1 is not free, T2 wait T1 on x1
+end(T1)         deadlock detected, kill T2, T1 write-lock x2, T1 commit, write x1 as 101, x2 as 102
+dump()          x1 -> 101, x2 -> 102, all other values remain unchanged
+    [summary]
+    T2 : abort
+    T1 : commit
+    x1 final value:  101
+    x2 final value:  102
+
+// test 2
+begin(T1)
+beginRO(T2)
+W(T1,x1,101)    x1 is free, write success, T1 write-lock x1
+R(T2,x2)        T2 read x2 and cache current x1 = 10
+W(T1,x2,102)    x2 is free, write success, T1 write-lock x2
+R(T2,x1)        T2 read cached x1 = 10
+end(T1)         T1 commit, write x1 as 101, x2 as 102
+end(T2)         T2 commit
+dump()          x1 -> 101, x2 -> 102, all other values remain unchanged
+    [summary]
+    T1 : commit
+    T2 : commit
+    x1 final value:  101
+    x2 final value:  102
+
+// test 3
+begin(T1)
+begin(T2)
+R(T1,x3)        x3 is free, read success, T1 read-lock x3
+fail(2)         site 2 failed
+W(T2,x8,88)     x8 is free, write success, T2 write-lock x8
+R(T2,x3)        x3 is read-locked, read success, T2 read-lock x3
+W(T1, x5,91)    x5 is free, write success, T1 write-lock x5
+end(T2)         T2 commit, write x8 as 88
+recover(2)      recover site 2
+end(T1)         T1 commit, write x5 as 91
+    [summary]
+    T2 : commit
+    T1 : commit
+    x8 final value:  88
+    x5 final value:  91
+
+//test 3.5
+begin(T1)
+begin(T2)
+R(T1,x3)        x3 is free, read success, T1 read-lock x3
+W(T2,x8,88)     x8 is free, write success, T2 write-lock x8, touched site(2)
+fail(2)         site(2) failed
+R(T2,x3)        x3 is read-locked, read success, T2 read-lock x3
+W(T1, x4,91)    x4 is free, write success, T1 write-lock x4
+recover(2)      recover site 2
+end(T2)         T2 abort, site 2 failed after T2 touched it
+end(T1)         T1 commit, write x4 as 91
+
+//test 4
+begin(T1)
+begin(T2)
+R(T1,x1)        x1 is free, read success, T1 read-lock x1, touched site(1)
+fail(2)         site(2) failed
+W(T2,x8,88)     
+R(T2,x3)
+R(T1, x5)
+end(T2)
+recover(2)
+end(T1)

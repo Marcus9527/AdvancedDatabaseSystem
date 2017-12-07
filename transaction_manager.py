@@ -9,6 +9,7 @@ import re
 import transaction
 import datamanager as dm
 
+
 # TransactionManager class
 class TransactionManager:
     def __init__(self):
@@ -49,6 +50,8 @@ class TransactionManager:
             self.resurrect(time)
             try:
                 line = line.strip('\n')
+                if line[0] in "/#'\"":
+                    continue
                 operation = re.split('[()]', line)
                 operation_name = operation[0].strip()
 
