@@ -1,21 +1,18 @@
+# author    : Lei Guo
+# date      : Dec. 7, 2017
+# Lock class simply tracks the lock information for a variable
+# includes a lockDict which records who (transactionID) hold which type of lock.
+
 class Lock:
     def __init__(self):
-        # 0: not locked;
+        # 0: Free;
         # 1: Read;
         # 2: Write;
         self.type = 0
         # since var could have multiple Read locks
-        # transactionID, locktype
+        # transactionID, lockType
         self.lockerDict = {}
-        # # [transaction,_type]
-        # self.wait_list = []
 
-    # def release(self):
-    #     self.type = 0
-
-    # return 1: locked
-    # return 0: waiting
-    # TODO: Transaction should have a global dict {trans, variable}?
     # When add lock is called, we ensure that it is legal
     def addLock(self, transID, lockType):
         self.lockerDict[transID] = lockType
@@ -25,13 +22,10 @@ class Lock:
         if transID in self.lockerDict:
             self.lockerDict.pop(transID)
             if not self.lockerDict:
+                # if not lock in the lockDict, it is free
                 self.type = 0
 
-
-    # release current lock and give it to next transaction waiting
-    def promote(self):
-        pass
-
+    # getters:
     def isFree(self):
         return self.type == 0
 
@@ -40,5 +34,3 @@ class Lock:
 
     def getLocker(self):
         return list(self.lockerDict.keys())
-
-

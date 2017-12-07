@@ -9,7 +9,6 @@ import re
 import transaction
 import datamanager as dm
 
-
 # TransactionManager class
 class TransactionManager:
     def __init__(self):
@@ -431,6 +430,3 @@ class TransactionManager:
             print("T"+str(transaction_id)+" :", self.final_result[transaction_id])
         for var in self.commit_summary:
             print(var, "final value: ", self.commit_summary[var])
-
-
-

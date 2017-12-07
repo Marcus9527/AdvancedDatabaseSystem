@@ -1,11 +1,19 @@
+# author    : Songnan Zhang
+# date      : Dec. 7, 2017
+# Transaction class: keeps tracking the essential info for a transaction
+# includes: cache, commit list, touch set, query buffer, and lock list
+
 class Transaction:
     def __init__(self, _id, _time, _ro=False):
-        # transaction index
+        # transaction id
         self.id = _id
 
         # read-only: True
         # read-write: False
         self.ro = _ro
+
+        # key: ID, val: Value
+        self.cache = {}
 
         # data successfully writen by transaction
         # key: ID, val: Value
@@ -26,15 +34,13 @@ class Transaction:
         self.query_buffer = []
 
         # data locked by this transaction
-        # key: ID, val: lock type('r'/'w')
+        # key: ID, val: lock type
         self.lock_list = {}
-
-        # key: ID, val: Value
-        self.cache = {}
 
         # should abort transaction due to site failure
         self.abort = False
 
+    # for printing the status of this transaction
     def __str__(self):
         s = "T"+str(self.id)
         if self.ro:
