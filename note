@@ -1,15 +1,15 @@
 Q:
 2. validation at commit time
     check if touched set has failed site
-++3. Deadlock detection need not happen at every tick. When it does, it should happen at the "beginning of the tick".
+3. Deadlock detection need not happen at every tick. When it does, it should happen at the "beginning of the tick".
 4. how to implement multiversion read consistency
     keep multi version in data
 5. If no relevant site is available, then T must wait. wait for what?
     recover
-++6. when multiple data exists, which one to chose for reading?
+6. when multiple data exists, which one to chose for reading?
     In case the site we read from failed later, we need to abort the transaction
-++7. is test as small as sample?
-++8. will read only transaction be blocked by write lock?
+7. is test as small as sample?
+8. will read only transaction be blocked by write lock?
 
 * If a site in touch set is down, then abort (RO need no do this)
 
