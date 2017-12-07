@@ -1,26 +1,42 @@
+# author    : Songnan Zhang
+# date      : Dec. 7, 2017
+# TransactionManager class: parsing input operations,
+#                           delivering data/site related operations to DataManager,
+#                           checking and dealing with deadlocks
+#                           delivering read/write results to user
+
 import re
 import transaction
-import lock
 import datamanager as dm
 
 
+# TransactionManager class
 class TransactionManager:
     def __init__(self):
+        self.DM = dm.DataManager()
+
         # transaction_index : transaction
         self.transaction_list = {}
 
-        # transaction_index(a) : [transaction_index(b)] a wait bi
+        # transaction_index(a) : [transaction_index(b)] transaction a waits b1,b2, ..., bi
         self.transaction_wait_table = {}
+
+        # data(x) : [transaction_index(a)] transaction a1, a2,..., ai are waiting for locking data x
         self.data_wait_table = {}
 
-        # transaction_index(b) : [transaction_index(ai)] (sequential list) b block ai
+        # transaction_index(b) : [transaction_index(ai)] (sequential list) b blocks a1, a2, ..., ai
         self.block_table = {}
 
-        self.DM = dm.DataManager()
+        # site fail time
         self.fail_history = {}
+
+        # final result for each transaction (commit/abort)
         self.final_result = {}
+
+        # final committed value for each data
         self.commit_summary = {}
 
+    # read and parse input files
     def parser(self, input_file):
         infile = open(input_file, 'r')
         lines = infile.readlines()
@@ -31,7 +47,6 @@ class TransactionManager:
             time += 1
             print("\n"+str(time)+">>>")
             self.deadlock_detection(time)
-            # try to resurrect transaction blocked by failed site
             self.resurrect(time)
             try:
                 line = line.strip('\n')
@@ -126,6 +141,7 @@ class TransactionManager:
             except ValueError as err:
                 print(err.args)
 
+    # create new transaction
     def begin(self, transaction_id, time, ro=False):
         msg = "begin T"+str(transaction_id)
         if ro:
@@ -135,6 +151,10 @@ class TransactionManager:
         t = transaction.Transaction(transaction_id, time, _ro=ro)
         self.transaction_list[transaction_id] = t
 
+    # attempt to read
+    # if DM.read return success, read will print the value
+    # if it is the first read of a read-only transaction, current database will be cached
+    # if DM.read return fail, data_wait_table, transaction_wait_table and block_table will be updated
     def read(self, transaction_id, variable_id, sys_time):
         msg = "T"+str(transaction_id)+" attempt to read "+str(variable_id)
         print(msg)
@@ -187,6 +207,9 @@ class TransactionManager:
                 self.transaction_list[transaction_id].status = "read"
                 self.transaction_list[transaction_id].query_buffer = [variable_id]
 
+    # attempt to write
+    # if DM.write return success, value to be write will be maintained in transaction's commit list
+    # if DM.write return fail, data_wait_table, transaction_wait_table and block_table will be updated
     def write(self, transaction_id, variable_id, value):
         msg = "T"+str(transaction_id)+" attempt to write "+str(variable_id)+" as "+str(value)
         print(msg)
@@ -217,6 +240,7 @@ class TransactionManager:
             self.transaction_list[transaction_id].status = "write"
             self.transaction_list[transaction_id].query_buffer = [variable_id, value]
 
+    # call corresponding DM.dump
     def dump(self, site=None, variable=None):
         print("TM phase: ")
         if site is None and variable is None:
@@ -230,6 +254,7 @@ class TransactionManager:
             print(msg)
         self.DM.dump(site, variable)
 
+    # call validation to check if transaction should be committed or aborted
     def end(self, transaction_id, sys_time):
         msg = "end T"+str(transaction_id)
         print(msg)
@@ -242,7 +267,7 @@ class TransactionManager:
         else:
             self.commit(transaction_id, sys_time)
 
-
+    # call DM.fail and maintain fail_history
     def fail(self, site_id, sys_time):
         msg = "site "+str(site_id)+" failed"
         print(msg)
@@ -255,12 +280,13 @@ class TransactionManager:
             if site_id in self.transaction_list[transaction_id].touch_set:
                 self.transaction_list[transaction_id].abort = True
 
+    # call DM.recover
     def recover(self, site_id):
         msg = "recover site " + str(site_id)
         print(msg)
         self.DM.recover(site_id)
-    #     check if some blocked transaction can be moving forward
 
+    # TM.end decide transaction should be committed, call DM.commit and release locks locked by transaction
     def commit(self, transaction_id, sys_time):
         msg = "commit transaction "+str(transaction_id)
         print(msg)
@@ -276,10 +302,10 @@ class TransactionManager:
             self.commit_summary[var] = trans.commit_list[var]
         self.final_result[transaction_id] = "commit"
 
+    # TM.end decide transaction should be aborted, release locks locked by transaction
     def abort(self, transaction_id, sys_time):
         msg = "abort transaction "+str(transaction_id)
         print(msg)
-        trans = self.transaction_list[transaction_id]
         self.release_locks(transaction_id, sys_time)
         del self.transaction_list[transaction_id]
         if transaction_id in self.transaction_wait_table:
@@ -292,6 +318,7 @@ class TransactionManager:
                     del self.data_wait_table[data][i]
         self.final_result[transaction_id] = "abort"
 
+    # check for deadlock, abort the youngest transaction if there is a deadlock
     def deadlock_detection(self, sys_time):
         msg = "detecting deadlock @ tick "+str(sys_time)
         print(msg)
@@ -334,6 +361,7 @@ class TransactionManager:
                         visited[f] = 2
                         stack.pop()
 
+    # release lock after a transaction commits or aborts, and give newly freed data to transactions in data_wait_list
     def release_locks(self, transaction_id, sys_time):
         msg = "release lock hold by T"+str(transaction_id)+" and give them to other blocked transactions"
         print(msg)
@@ -355,6 +383,7 @@ class TransactionManager:
         for tid in retry_list:
             self.retry(tid, sys_time)
 
+    # check if any transaction blocked due to site failure can be proceeded
     def resurrect(self, sys_time):
         msg = "resurrect transactions blocked by failed site"
         print(msg)
@@ -370,6 +399,7 @@ class TransactionManager:
                     del self.block_table[-1][i]
                     self.write(trans_id, variable_id, value)
 
+    # check if a transaction should be aborted due to site failure
     def validation(self, sites_touched, start_time, end_time):
         for site in sites_touched:
             if site in self.fail_history:
@@ -378,6 +408,7 @@ class TransactionManager:
                         return False
         return True
 
+    # retry blocked transaction
     def retry(self, transaction_id, sys_time):
         trans = self.transaction_list[transaction_id]
         if self.transaction_list[transaction_id].status == "read":
@@ -385,25 +416,21 @@ class TransactionManager:
         elif self.transaction_list[transaction_id].status == "write":
             self.write(transaction_id, trans.query_buffer[0], trans.query_buffer[1])
 
+    # print TM info
     def print_status(self):
         print("transaction_wait_table : ", self.transaction_wait_table.__str__())
         print("block_table            : ", self.block_table.__str__())
         print("data_wait_table        : ", self.data_wait_table.__str__())
         for t_id in self.transaction_list:
             print(self.transaction_list[t_id])
-        print("fail_history           : ", self.fail_history.__str__())
 
-
+    # print final TM info
     def print_final_status(self):
         print("\n[summary]")
         for transaction_id in self.final_result:
             print("T"+str(transaction_id)+" :", self.final_result[transaction_id])
         for var in self.commit_summary:
-            print(var,"final value: ", self.commit_summary[var])
+            print(var, "final value: ", self.commit_summary[var])
 
 
-if __name__ == "__main__":
-    TM = TransactionManager()
-    TM.parser("input")
-    TM.print_final_status()
 
