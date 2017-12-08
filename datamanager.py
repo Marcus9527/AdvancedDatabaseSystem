@@ -1,6 +1,6 @@
 # author    : Lei Guo
 # date      : Dec. 7, 2017
-# Data Manager do the work below:
+# Data Manager does the work below:
 # 1. The database: list of 10 Sites
 # 2. (Attempt to) read/write: decide whether a certain transaction could or could not get the requested lock,
 # 3. Fail/Recovering a certain site

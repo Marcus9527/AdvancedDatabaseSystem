@@ -1,0 +1,367 @@
+'''explain expected result for each test'''
+// test 1
+begin(T1)
+begin(T2)
+W(T1,x1,101)    x1 is free, write success, T1 write-lock x1
+W(T2,x2,202)    x2 is free, write success, T2 write-lock x2
+W(T1,x2,102)    x2 is not free, T1 wait T2 on x2
+W(T2,x1,201)    x1 is not free, T2 wait T1 on x1
+end(T1)         deadlock detected, kill T2, T1 write-lock x2, T1 commit, write x1 as 101, x2 as 102
+dump()          x1 -> 101, x2 -> 102, all other values remain unchanged
+    [summary]
+    T2 : abort
+    T1 : commit
+    x1 final value:  101
+    x2 final value:  102
+
+// test 2
+begin(T1)
+beginRO(T2)
+W(T1,x1,101)    x1 is free, write success, T1 write-lock x1
+R(T2,x2)        T2 read x2, cache current x1 = 10
+W(T1,x2,102)    x2 is free, write success, T1 write-lock x2
+R(T2,x1)        T2 read cached x1 = 10
+end(T1)         T1 commit, write x1 as 101, x2 as 102
+end(T2)         T2 commit
+dump()          x1 -> 101, x2 -> 102, all other values remain unchanged
+    [summary]
+    T1 : commit
+    T2 : commit
+    x1 final value:  101
+    x2 final value:  102
+
+// test 3
+begin(T1)
+begin(T2)
+R(T1,x3)        x3 is free, read success, T1 read-lock x3 = 30
+fail(2)         site 2 failed
+W(T2,x8,88)     x8 is free, write success, T2 write-lock x8
+R(T2,x3)        x3 is read-locked, read success, T2 read-lock x3
+W(T1, x5,91)    x5 is free, write success, T1 write-lock x5
+end(T2)         T2 commit, write x8 as 88
+recover(2)      recover site(2)
+end(T1)         T1 commit, write x5 as 91
+    [summary]
+    T2 : commit
+    T1 : commit
+    x8 final value:  88
+    x5 final value:  91
+
+//test 3.5
+begin(T1)
+begin(T2)
+R(T1,x3)        x3 is free, read success, T1 read-lock x3 = 30
+W(T2,x8,88)     x8 is free, write success, T2 write-lock x8, touched site(2)
+fail(2)         site(2) failed
+R(T2,x3)        x3 is read-locked, read success, T2 read-lock x3 = 30
+W(T1, x4,91)    x4 is free, write success, T1 write-lock x4
+recover(2)      recover site(2)
+end(T2)         T2 abort, site 2 failed after T2 touched it
+end(T1)         T1 commit, write x4 as 91
+    [summary]
+    T2 : abort
+    T1 : commit
+    x4 final value:  91
+
+//test 4
+begin(T1)
+begin(T2)
+R(T1,x1)        x1 is free, read success, T1 read-lock x1 = 10, touched site(2)
+fail(2)         site(2) failed
+W(T2,x8,88)     x1 is free, write success, T1 read-lock x1 = 10
+R(T2,x3)        x3 is free, read success, T2 read lock x3 = 30
+R(T1, x5)       x5 is free, read success, T1 read lock x5 = 50
+end(T2)         T2 commit, write x8 as 88
+recover(2)      recover site(2)
+end(T1)         T1 abort, site 2 failed after T1 touched it
+    [summary]
+    T2 : commit
+    T1 : abort
+    x8 final value:  88
+
+//test 5
+begin(T1)
+begin(T2)
+W(T1,x6,66)     x6 is free, write success, T1 write-lock x1, touched site(2)
+fail(2)         site(2) failed
+W(T2,x8,88)     x8 is free, write success, T2 write-lock x8
+R(T2,x3)        x3 is free, read success, T2 read lock x3 = 30
+R(T1, x5)       x5 is free, read success, T1 read lock x3 = 30
+end(T2)         T2 commit, write x8 as 88
+recover(2)      recover site(2)
+end(T1)
+    [summary]
+    T2 : commit
+    T1 : abort
+    x8 final value:  88
+
+//test 6
+begin(T1)
+begin(T2)
+fail(3)         site(3) failed
+fail(4)         site(4) failed
+R(T1,x1)        x1 is free, read success, T1 read lock x1 = 10
+W(T2,x8,88)     x8 is free, write success, T2 write lock x8
+end(T1)         T1 commit
+recover(4)      recover site(3)
+recover(3)      recover site(4)
+R(T2,x3)        x3 is only on site 4, read success, T2 lock x3 = 30
+end(T2)         T2 commit, write x8 as 88
+dump()          x8 -> 88, all other values remain unchanged
+    [summary]
+    T1 : commit
+    T2 : commit
+    x8 final value:  88
+
+//test 7
+begin(T1)
+beginRO(T2)
+R(T2,x1)        x1 si free, read success, cache current x2 = 20 , x3 = 30
+R(T2,x2)        T2 read cached x2 = 20
+W(T1,x3,33)     x3 is free, write success, T1 write lock x3
+end(T1)         T1 commit, write x3 as 33
+R(T2,x3)        T2 read cached x3 = 30
+end(T2)         T2 commit
+    [summary]
+    T1 : commit
+    T2 : commit
+    x3 final value:  33
+
+//test 8
+begin(T1)
+beginRO(T2)
+R(T2,x1)        x1 is free, read success, cache current x2 = 20, x3 = 30
+R(T2,x2)        T2 read cached x2 = 20
+W(T1,x3,33)     x3 is free, write success, T1 write lock x3
+end(T1)         T1 commit, write x3 as 33
+beginRO(T3)
+R(T3,x3)        x3 is free, read success, x3 = 33
+R(T2,x3)        T2 read cached x3 = 30
+end(T2)         T2 commit
+end(T3)         T3 commit
+    [summary]
+    T1 : commit
+    T2 : commit
+    T3 : commit
+    x3 final value:  33
+
+//test 9
+begin(T3)
+begin(T1)
+begin(T2)
+W(T3,x2,22)     x2 is free, write success, T3 write lock x2
+W(T2,x4,44)     x4 is free, write success, T2 write lock x4
+R(T3,x4)        T3 wait T2 on x4
+end(T2)         T2 commit, write x4 as 44, T3 read lock x4 = 44
+end(T3)         T3 commit, write x2 as 22
+R(T1,x2)        x2 is free, read success, T1 read lock x2 = 22
+end(T1)         T1 commit
+    [summary]
+    T2 : commit
+    T3 : commit
+    T1 : commit
+    x4 final value:  44
+    x2 final value:  22
+
+//test 10
+begin(T1)
+begin(T2)
+begin(T3)
+W(T3,x2,22)     x2 is free, write success, T3 write lock x2
+W(T2,x4,44)     x4 is free, write success, T2 write lock x4
+R(T3,x4)        T3 wait T2 on x4
+end(T2)         T2 commit, write x4 as 44, T3 read lock x4 = 44
+end(T3)         T3 commit, write x2 as 22
+R(T1,x2)        x2 is free, read success, T1 read lock x2 = 22
+end(T1)         T1 commit
+    [summary]
+    T2 : commit
+    T3 : commit
+    T1 : commit
+    x4 final value:  44
+    x2 final value:  22
+
+//test 11
+begin(T1)
+begin(T2)
+R(T1,x2)        x2 is free, read success, T1 read lock x2 = 20
+R(T2,x2)        x2 is read locked, read success, T2 read lock x2 = 20
+W(T2,x2,10)     T2 wait T1 on x2
+end(T1)         T1 commit, T2 write lock x2
+end(T2)         T2 commit, write x2 as 10
+    [summary]
+    T1 : commit
+    T2 : commit
+    x2 final value:  10
+
+//test 12
+begin(T1)
+begin(T2)
+R(T1,x2)        x2 is free, read success, T1 read lock x2 = 20
+R(T2,x2)        x2 is read locked, read success, T2 read lock x2 = 20
+end(T1)         T1 commit
+W(T2,x2,10)     x2 is read locked only by T2, T2 write lock x2
+end(T2)         T2 commit, write x2 as 10
+    [summary]
+    T1 : commit
+    T2 : commit
+    x2 final value:  10
+
+//test 13
+begin(T1)
+begin(T2)
+begin(T3)
+W(T3,x2,10)     x2 is free, write success, T3 write lock x2
+W(T2,x2,10)     T2 wait T3 on x2
+W(T1,x2,10)     T1 wait T3 on x2
+end(T3)         T3 commit, write x2 as 10, T2 write lock x2
+end(T2)         T2 commit, write x2 as 10, T1 write lock x1
+end(T1)         T1 commit, write x2 as 10
+    [summary]
+    T3 : commit
+    T2 : commit
+    T1 : commit
+    x2 final value:  10
+
+//test 14
+begin(T1)
+begin(T2)
+begin(T3)
+W(T3,x2,10)     x2 is free, write success, T3 write lock x2
+W(T1,x2,10)     T1 wait T3 on x2
+W(T2,x2,10)     T2 wait T3 on x2
+end(T3)         T3 commit, write x2 as 10, T1 write lock x2
+end(T1)         T1 commit, write x2 as 10, T2 write lock x1
+end(T2)         T2 commit, write x2 as 10
+    [summary]
+    T3 : commit
+    T1 : commit
+    T2 : commit
+    x2 final value:  10
+
+//test 15
+begin(T5)
+begin(T4)
+begin(T3)
+begin(T2)
+begin(T1)
+W(T1,x4, 5)     x4 is free, write success, T1 write lock x4, touched site(2)
+fail(2)         site(2) failed
+W(T2,x4,44)     x4 is free, write success, T2 write lock x4
+recover(2)      recover site (2)
+W(T3,x4,55)     T3 wait T2 on x4
+W(T4,x4,66)     T4 wait T2 on x4
+W(T5,x4,77)     T5 wait T2 on x4
+end(T1)         T1 abort, site 2 failed after T1 touched it
+end(T2)         T2 commit, write x4 as 44, T3 write lock x4
+end(T3)         T3 commit, write x4 as 55, T4 write lock x4
+end(T4)         T4 commit, write x4 as 66, T5 write lock x4
+end(T5)         T5 commit, write x4 as 77
+    [summary]
+    T1 : abort
+    T2 : commit
+    T3 : commit
+    T4 : commit
+    T5 : commit
+    x4 final value:  77
+
+//test 16
+begin(T3)
+begin(T1)
+begin(T2)
+W(T3,x2,22)     x2 is free, write success, T3 write lock x2
+W(T2,x4,44)     x4 is free, write success, T2 write lock x4
+R(T3,x4)        T3 wait T2 on x4
+end(T2)         T2 commit, write x4 as 44, T3 read lock x4 = 44
+end(T3)         T3 commit, write x2 as 22
+R(T1,x2)        x2 is free, read success, T1 read lock x2 = 22
+end(T1)
+    [summary]
+    T2 : commit
+    T3 : commit
+    T1 : commit
+    x4 final value:  44
+    x2 final value:  22
+
+//test 17
+begin(T3)
+begin(T1)
+begin(T2)
+W(T3,x2,22)     x2 is free, write success, T3 write lock x2, touched site(4)
+W(T2,x3,44)     x3 is free, write success, T2 write lock x3
+R(T3,x3)        T3 wait T2 on x3
+end(T2)         T2 commit, write x3 as 44
+fail(4)         site(4) failed
+end(T3)         T3 abort, site 4 failed after T3 touched it
+R(T1,x2)        x2 is free, read success, T1 read lock x2 = 20
+end(T1)         T1 commit
+    [summary]
+    T2 : commit
+    T3 : abort
+    T1 : commit
+    x3 final value:  44
+
+//test 18
+begin(T1)
+begin(T2)
+begin(T3)
+begin(T4)
+begin(T5)
+R(T3,x3)        x3 is free, read success, T3 read lock x3 = 30
+R(T4,x4)        x4 is free, read success, T4 read lock x4 = 40
+R(T5,x5)        x5 is free, read success, T5 read lock x5 = 50
+R(T1,x1)        x1 is free, read success, T1 read lock x1 = 10
+R(T2,x2)        x2 is free, read success, T2 read lock x3 = 20
+W(T1,x2,10)     T1 wait T2 on x2
+W(T2,x3,20)     T2 wait T3 on x3
+W(T3,x4,30)     T3 wait T4 on x4
+W(T4,x5,40)     T4 wait T5 on x5
+W(T5,x1,50)     T5 wait T1 on x1
+end(T4)         deadlock detected, kill T5, T4 write-lock x5, T4 commit, write x5 as 40, T3 write lock x4
+end(T3)         T3 commit, write x4 as 30, T2 write lock x3
+end(T2)         T2 commit, write x3 as 20, T1 write lock x2
+end(T1)         T1 commit, write x2 as 10
+    [summary]
+    T5 : abort
+    T4 : commit
+    T3 : commit
+    T2 : commit
+    T1 : commit
+    x5 final value:  40
+    x4 final value:  30
+    x3 final value:  20
+    x2 final value:  10
+
+//test 19
+begin(T1)
+begin(T2)
+begin(T3)
+begin(T4)
+begin(T5)
+R(T3,x3)        x3 is free, read success, T3 read lock x3 = 30, touched site(4)
+fail(4)         site(4) failed
+recover(4)      recover site(4), x3 is free
+R(T4,x4)        x4 is free, read success, T4 read lock x4 = 40
+R(T5,x5)        x5 is free, read success, T5 read lock x5 = 50
+R(T1,x6)        x6 is free, read success, T1 read lock x6 = 60
+R(T2,x2)        x2 is free, read success, T2 read lock x2 = 20
+W(T1,x2,10)     T1 wait T2 on x2
+W(T2,x3,20)     x3 is free, write success, T2 write lock x3
+W(T3,x4,30)     T3 wait T4 on x4
+W(T5,x1,50)     x1 is free, write success, T5 write lock x1
+end(T5)         T5 commit, write x1 as 50,  x1 and x5 are free
+W(T4,x5,40)     x5 is free, write success, T4 write lock x5
+end(T4)         T4 commit, write x5 as 40, T3 write lock x4
+end(T3)         T3 abort, site 4 failed after T3 touched it
+end(T2)         T2 commit, write x3 as 20, T1 write lock x2
+end(T1)         T1 commit, write x2 as 10
+    [summary]
+    T5 : commit
+    T4 : commit
+    T3 : abort
+    T2 : commit
+    T1 : commit
+    x1 final value:  50
+    x5 final value:  40
+    x3 final value:  20
+    x2 final value:  10
