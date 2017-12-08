@@ -47,7 +47,7 @@ transaction_manager.py
 <class>: TransactionManager
     [data member]:
 
-        DM (DataManager)                :   DataManager object
+        TM (TransactionManager)         :   TransactionManager object
 
         transaction_list (dict)         :   key: transaction_ID, val: transaction
 
@@ -146,3 +146,176 @@ transaction_manager.py
 
         print_final_status()
             return  - none
+
+
+---Part 2: Data Manager---
+Author: Lei Guo
+
+1. datamanager.py
+<class>: DataManager
+    [data member]:
+
+        DM (DataManager)                :   DataManager object
+
+        database (list)                 :   stores all 10 sites
+
+        varSite (dict)                  :   key: var, val: sites
+
+    [function members]:
+
+        generateCacheForRO(trans)
+            generate cache for read only transaction
+
+        read(trans, ID)
+            check if the transaction could get the read lock or not.
+            return (True, siteNum) or
+            return (False, blockers) or if all the sites which have variables down:
+            return (False, -1)
+
+        write(transID, ID)
+            check if the transaction could get the write lock or not.
+            return (True, siteNum) or
+            return (False, blockers) or if all the sites which have variables down:
+            return (False, -1)
+
+        commit(transId, commitList)
+            commit the values for variables in commitList
+
+        writeValToDatabase(ID, val)
+            called in commit
+
+        releaseLocks(transID, lockDict)
+            release locks after commit or abort.
+            return variables which turned Free after the release
+
+        dump(siteNum=None, ID=None)
+            dump the values of variables
+            dump all data in the database;
+            dump all data in a certain site;
+            dump a certain variable in all sites;
+
+        fail(self, siteNum)
+            fail a running site
+
+        recover(self, siteNum)
+            recover a failed site
+
+2. site.py
+<class>: Site
+    [data member]:
+
+        isRunning                        :    boolean
+
+        isRecovered                      :    boolean
+
+        siteNum                          :    site number
+
+        variables (dict)                 :    key: VariableID, value: Variable, this is for fast query data by ID
+
+        lockTable (dict)                 :    key: VariableID, value: Lock(s)
+
+        self.isReady = {}                :    key: VariableID, value: boolean, ready or not
+
+        self.timeStamp                   :    timestamp
+
+    [function members]:
+
+    Getters:
+        getTime():
+        return timestamp
+
+        getAllVariables():
+        return variables
+
+        getVariable(ID):
+        return variables[ID]
+
+        getLockType(ID):
+        return lockTable[ID].type
+
+        getSiteNum():
+        return siteNum
+
+        isUp():
+        return isRunning
+
+    Others:
+
+        isVariableFree(ID):
+        rerurn variable with ID free or not
+
+        isVarValid(ID):
+        return whether this variable's value is valid for read
+
+        isReplicated(ID):
+        return whether a variable has replicate in other sites
+        used in deciding whether a variable is ready to be read right after recovery
+
+
+        lockVar(ID, transID, lockType):
+        add a lock to the variable
+
+        unLock(transID, ID):
+        remove locks by a certain transaction
+
+        writeVarVal(ID, val):
+        write val to variable with ID
+
+        failSite():
+        fail this site and clear the lock table
+
+        recoverSite():
+        recover the site and initialize the lock table
+
+
+3. lock.py
+<class>: Lock
+    [data member]:
+
+        type                             :    0: Free; 1: Read; 2: Write;
+
+        lockerDict (dict)                :    key: transactionID, val: lockType
+
+    [function members]:
+
+    Getters:
+        isFree():
+        determine if this lock is actually free
+
+        getType():
+        get the lock type
+
+        getLocker():
+        get the lockers(transactions)
+
+    Others:
+
+        addLock(transID, lockType):
+        add a lock to this lock object
+
+        removeLock(transID):
+        remove a lock by transID
+
+
+4. variable.py
+<class>: Variable
+    [data member]:
+
+        Idx                              :    index of this variable
+
+        ID                               :    ID: X+Idx
+
+        data                             :    value
+
+    [function members]:
+
+    Getters and setters:
+
+        getID():
+        return ID
+
+        getData():
+        return data
+
+        setData(newData):
+        set data to newData
