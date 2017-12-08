@@ -7,7 +7,7 @@
 # 4. Commit a certain transaction (write values to database)
 # 5. Dump the values required of the current database
 
-from site import Site
+from datasite import Site
 
 class DataManager:
     def __init__(self):
